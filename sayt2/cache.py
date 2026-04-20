@@ -17,7 +17,7 @@ key prefixes and linked by a shared tag for bulk eviction.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import diskcache
 
@@ -42,7 +42,7 @@ class DataSetCache:
         dir_cache: Path,
         dataset_name: str,
         schema_hash: str,
-        expire: Optional[int] = None,
+        expire: int | None = None,
     ):
         self._cache = diskcache.Cache(str(dir_cache))
         self._dataset_name = dataset_name
@@ -82,7 +82,7 @@ class DataSetCache:
 
     # -- Layer 2: query result cache ------------------------------------------
 
-    def get_query_result(self, query: str, limit: int) -> Optional[SearchResponse]:
+    def get_query_result(self, query: str, limit: int) -> "SearchResponse | None":
         """
         Return the cached result for *(query, limit)*, or ``None`` on miss.
 
