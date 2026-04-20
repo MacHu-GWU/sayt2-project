@@ -24,10 +24,10 @@ class TestTracker:
 
     def test_lock_and_unlock_cycle(self, tracker):
         """lock → unlock → lock again should all succeed."""
-        tracker.lock_it("books")
-        tracker.unlock_it("books")
         token = tracker.lock_it("books")
-        assert len(token) == 32
+        tracker.unlock_it("books", token)
+        token2 = tracker.lock_it("books")
+        assert len(token2) == 32
 
     def test_double_lock_raises(self, tracker):
         """Row exists, actively locked → WHERE fails → rowcount=0 → raises."""
@@ -41,6 +41,34 @@ class TestTracker:
         time.sleep(1.5)
         token = tracker.lock_it("books", expire=1)
         assert len(token) == 32
+
+    def test_unlock_requires_matching_token(self, tracker):
+        """unlock_it with wrong token is a no-op; the lock stays held."""
+        tracker.lock_it("books")
+        tracker.unlock_it("books", "wrong_token")
+        # lock is still held
+        with pytest.raises(TrackerIsLockedError):
+            tracker.lock_it("books")
+
+    def test_expired_lock_not_released_by_old_holder(self, tracker):
+        """
+        Scenario: A holds lock → expires → B re-acquires → A calls unlock.
+        A's token no longer matches, so B's lock is NOT released.
+        """
+        token_a = tracker.lock_it("books", expire=1)
+        time.sleep(1.5)
+        token_b = tracker.lock_it("books", expire=60)
+
+        # A tries to release — should be no-op (token mismatch)
+        tracker.unlock_it("books", token_a)
+
+        # B's lock is still held
+        with pytest.raises(TrackerIsLockedError):
+            tracker.lock_it("books")
+
+        # B can release its own lock
+        tracker.unlock_it("books", token_b)
+        tracker.lock_it("books")
 
     def test_context_manager_acquires_and_releases(self, tracker):
         with tracker.lock("books"):
@@ -85,7 +113,6 @@ class TestTracker:
         Tracker(db_path).lock_it("x")
 
     def test_unique_tokens(self, tracker):
-        """Each lock acquisition returns a distinct token."""
         t1 = tracker.lock_it("a")
         t2 = tracker.lock_it("b")
         assert t1 != t2
@@ -101,7 +128,8 @@ def _worker_try_lock(db_path: str, name: str, result_queue):
 
 
 class TestTrackerConcurrency:
-    def test_only_one_process_acquires_lock(self, tmp_path):
+    def test_preacquired_lock_blocks_child(self, tmp_path):
+        """Main process holds lock; child process is blocked."""
         db_path = tmp_path / "concurrent.db"
         Tracker(db_path).lock_it("shared", expire=30)
 
@@ -113,6 +141,30 @@ class TestTrackerConcurrency:
         p.start()
         p.join(timeout=5)
         assert q.get(timeout=1) == "blocked"
+
+    def test_concurrent_race(self, tmp_path):
+        """N processes race for the same lock; exactly one wins."""
+        db_path = tmp_path / "race.db"
+        # force table creation so all workers start on equal footing
+        token = Tracker(db_path).lock_it("warmup", expire=1)
+        Tracker(db_path).unlock_it("warmup", token)
+
+        n = 5
+        q = multiprocessing.Queue()
+        procs = [
+            multiprocessing.Process(
+                target=_worker_try_lock, args=(str(db_path), "race", q)
+            )
+            for _ in range(n)
+        ]
+        for p in procs:
+            p.start()
+        for p in procs:
+            p.join(timeout=10)
+
+        results = [q.get(timeout=1) for _ in range(n)]
+        assert results.count("acquired") == 1
+        assert results.count("blocked") == n - 1
 
 
 if __name__ == "__main__":
