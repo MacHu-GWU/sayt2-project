@@ -7,13 +7,13 @@ Responsibilities:
 - Build a tantivy schema from field definitions
 - Register custom tokenizers (ngram)
 - Write documents into the index
-- (later steps) query, sort, cache integration
+- Query the index with automatic field_boosts
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable
 
 import tantivy
 from tantivy import (
@@ -123,7 +123,7 @@ def write_documents(
     index: Index,
     data: Iterable[dict[str, Any]],
     memory_budget_bytes: int = 128_000_000,
-    num_threads: Optional[int] = None,
+    num_threads: int | None = None,
 ) -> int:
     """
     Write *data* into *index*.
@@ -147,3 +147,63 @@ def write_documents(
     writer.wait_merging_threads()
     index.reload()
     return count
+
+
+def _collect_search_config(
+    fields: list[BaseField],
+) -> tuple[list[str], dict[str, float]]:
+    """
+    Walk *fields* and return ``(searchable_names, field_boosts)``.
+
+    Only fields with a ``boost`` attribute (KeywordField, TextField, NgramField)
+    are searchable.  Boosts equal to 1.0 are omitted from the dict since that
+    is tantivy's default.
+    """
+    names: list[str] = []
+    boosts: dict[str, float] = {}
+    for f in fields:
+        if hasattr(f, "boost"):
+            names.append(f.name)
+            if f.boost != 1.0:
+                boosts[f.name] = f.boost
+    return names, boosts
+
+
+def search_index(
+    index: Index,
+    fields: list[BaseField],
+    query_str: str,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """
+    Parse *query_str* against the searchable fields in *fields*, execute the
+    search, and return up to *limit* hits as a list of dicts.
+
+    Each hit dict contains every stored field from the document plus
+    ``_score`` (BM25 relevance score).
+
+    Field boosts declared on field definitions are applied automatically.
+    """
+    searchable, boosts = _collect_search_config(fields)
+    if not searchable:
+        return []
+
+    kwargs: dict[str, Any] = {}
+    if boosts:
+        kwargs["field_boosts"] = boosts
+    query = index.parse_query(query_str, searchable, **kwargs)
+    searcher = index.searcher()
+    results = searcher.search(query, limit=limit)
+
+    stored_names = [f.name for f in fields if f.stored]
+
+    hits: list[dict[str, Any]] = []
+    for score, addr in results.hits:
+        doc = searcher.doc(addr)
+        hit: dict[str, Any] = {"_score": score}
+        for name in stored_names:
+            values = doc[name]
+            if values:
+                hit[name] = values[0] if len(values) == 1 else values
+        hits.append(hit)
+    return hits

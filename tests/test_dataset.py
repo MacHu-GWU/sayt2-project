@@ -14,7 +14,13 @@ from sayt2.fields import (
     DatetimeField,
     BooleanField,
 )
-from sayt2.dataset import build_schema, open_index, write_documents
+from sayt2.dataset import (
+    build_schema,
+    open_index,
+    write_documents,
+    search_index,
+    _collect_search_config,
+)
 
 
 SAMPLE_FIELDS = [
@@ -115,6 +121,11 @@ class TestWriteDocuments:
         count = write_documents(index, [])
         assert count == 0
 
+    def test_write_with_num_threads(self, tmp_path):
+        index = open_index(tmp_path / "index", SAMPLE_FIELDS)
+        count = write_documents(index, SAMPLE_DOCS, num_threads=1)
+        assert count == 5
+
     def test_stored_fields_retrievable(self, tmp_path):
         index = open_index(tmp_path / "index", SAMPLE_FIELDS)
         write_documents(index, SAMPLE_DOCS)
@@ -170,6 +181,110 @@ class TestWriteDocuments:
         query = index.parse_query("book", ["title"])
         results = searcher.search(query, limit=10, order_by_field="year")
         assert len(results.hits) == 2
+
+
+class TestCollectSearchConfig:
+    def test_collects_searchable_fields(self):
+        names, boosts = _collect_search_config(SAMPLE_FIELDS)
+        assert "id" in names      # KeywordField
+        assert "title" in names   # NgramField
+        assert "body" in names    # TextField
+        assert "year" not in names   # NumericField — no boost
+        assert "rating" not in names
+
+    def test_default_boost_omitted(self):
+        fields = [TextField(name="body"), NgramField(name="title")]
+        _, boosts = _collect_search_config(fields)
+        assert boosts == {}  # all 1.0 → empty dict
+
+    def test_custom_boost_collected(self):
+        fields = [
+            TextField(name="body", boost=1.0),
+            NgramField(name="title", boost=3.0),
+            KeywordField(name="id", boost=0.5),
+        ]
+        names, boosts = _collect_search_config(fields)
+        assert set(names) == {"body", "title", "id"}
+        assert boosts == {"title": 3.0, "id": 0.5}
+
+    def test_no_searchable_fields(self):
+        fields = [StoredField(name="raw"), NumericField(name="year")]
+        names, boosts = _collect_search_config(fields)
+        assert names == []
+        assert boosts == {}
+
+
+class TestSearchIndex:
+    @pytest.fixture()
+    def indexed(self, tmp_path):
+        index = open_index(tmp_path / "index", SAMPLE_FIELDS)
+        write_documents(index, SAMPLE_DOCS)
+        return index
+
+    def test_basic_text_search(self, indexed):
+        hits = search_index(indexed, SAMPLE_FIELDS, "python")
+        assert len(hits) >= 1
+        titles = [h["title"] for h in hits]
+        assert any("Python" in t for t in titles)
+
+    def test_hit_has_score(self, indexed):
+        hits = search_index(indexed, SAMPLE_FIELDS, "python")
+        assert all("_score" in h for h in hits)
+        assert all(isinstance(h["_score"], float) for h in hits)
+
+    def test_hit_contains_stored_fields(self, indexed):
+        hits = search_index(indexed, SAMPLE_FIELDS, "python")
+        hit = hits[0]
+        assert "id" in hit
+        assert "title" in hit
+        assert "body" in hit
+
+    def test_ngram_substring_search(self, indexed):
+        """Ngram field allows matching partial words like 'pyth'."""
+        hits = search_index(indexed, SAMPLE_FIELDS, "pyth")
+        assert len(hits) >= 1
+        assert any("Python" in h["title"] for h in hits)
+
+    def test_limit_respected(self, indexed):
+        hits = search_index(indexed, SAMPLE_FIELDS, "python", limit=1)
+        assert len(hits) <= 1
+
+    def test_no_results(self, indexed):
+        hits = search_index(indexed, SAMPLE_FIELDS, "xyznonexistent")
+        assert hits == []
+
+    def test_no_searchable_fields_returns_empty(self, tmp_path):
+        fields = [NumericField(name="year")]
+        index = open_index(tmp_path / "index", fields)
+        write_documents(index, [{"year": 2024}])
+        hits = search_index(index, fields, "2024")
+        assert hits == []
+
+    def test_field_boost_affects_ranking(self, tmp_path):
+        """Higher-boosted field should rank its matches higher."""
+        fields = [
+            NgramField(name="title", boost=5.0),
+            TextField(name="body", boost=1.0),
+            KeywordField(name="id"),
+        ]
+        docs = [
+            {"id": "1", "title": "Rust guide", "body": "Learn Python programming"},
+            {"id": "2", "title": "Python guide", "body": "Learn Rust programming"},
+        ]
+        index = open_index(tmp_path / "index", fields)
+        write_documents(index, docs)
+
+        hits = search_index(index, fields, "python")
+        assert len(hits) == 2
+        # doc with "Python" in title (boost=5.0) should rank first
+        assert hits[0]["id"] == "2"
+
+    def test_multi_field_search(self, indexed):
+        """Query matches across different field types."""
+        # "rust" appears in title (ngram) and body (text)
+        hits = search_index(indexed, SAMPLE_FIELDS, "rust")
+        assert len(hits) >= 1
+        assert any("Rust" in h["title"] for h in hits)
 
 
 if __name__ == "__main__":
