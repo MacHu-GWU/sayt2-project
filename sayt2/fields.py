@@ -18,6 +18,8 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, Field, model_validator
 
+from .constants import FieldTypeEnum, NumericKindEnum, TokenizerEnum
+
 # --- base -------------------------------------------------------------------
 
 
@@ -41,7 +43,7 @@ class BaseField(BaseModel):
 class StoredField(BaseField):
     """Store-only field.  Not indexed, not searchable, not sortable."""
 
-    type: Literal["stored"] = "stored"
+    type: Literal["stored"] = FieldTypeEnum.STORED.value
 
 
 class KeywordField(BaseField):
@@ -50,7 +52,7 @@ class KeywordField(BaseField):
     hood — the entire field value is treated as one token.
     """
 
-    type: Literal["keyword"] = "keyword"
+    type: Literal["keyword"] = FieldTypeEnum.KEYWORD.value
     boost: float = Field(default=1.0, gt=0)
 
 
@@ -60,8 +62,8 @@ class TextField(BaseField):
     boundary) or ``en_stem`` (English stemming) tokenizer.
     """
 
-    type: Literal["text"] = "text"
-    tokenizer: Literal["default", "en_stem"] = "default"
+    type: Literal["text"] = FieldTypeEnum.TEXT.value
+    tokenizer: Literal["default", "en_stem"] = TokenizerEnum.DEFAULT.value
     boost: float = Field(default=1.0, gt=0)
 
 
@@ -71,7 +73,7 @@ class NgramField(BaseField):
     substring of length ``[min_gram, max_gram]`` is a valid query token.
     """
 
-    type: Literal["ngram"] = "ngram"
+    type: Literal["ngram"] = FieldTypeEnum.NGRAM.value
     min_gram: int = Field(default=2, ge=1)
     max_gram: int = Field(default=6, ge=1)
     prefix_only: bool = False
@@ -96,8 +98,8 @@ class NumericField(BaseField):
     is the typical use case for rating/year columns.
     """
 
-    type: Literal["numeric"] = "numeric"
-    kind: Literal["i64", "u64", "f64"] = "i64"
+    type: Literal["numeric"] = FieldTypeEnum.NUMERIC.value
+    kind: Literal["i64", "u64", "f64"] = NumericKindEnum.I64.value
     indexed: bool = False
     fast: bool = True
 
@@ -105,7 +107,7 @@ class NumericField(BaseField):
 class DatetimeField(BaseField):
     """Datetime field backed by tantivy's date type."""
 
-    type: Literal["datetime"] = "datetime"
+    type: Literal["datetime"] = FieldTypeEnum.DATETIME.value
     indexed: bool = True
     fast: bool = True
 
@@ -113,7 +115,7 @@ class DatetimeField(BaseField):
 class BooleanField(BaseField):
     """Boolean field."""
 
-    type: Literal["boolean"] = "boolean"
+    type: Literal["boolean"] = FieldTypeEnum.BOOLEAN.value
     indexed: bool = True
 
 
