@@ -19,7 +19,11 @@ from sayt2.dataset import (
     open_index,
     write_documents,
     search_index,
+    fuzzy_search_index,
+    search_index_sorted,
     _collect_search_config,
+    _sort_hits,
+    SortKey,
 )
 
 
@@ -285,6 +289,222 @@ class TestSearchIndex:
         hits = search_index(indexed, SAMPLE_FIELDS, "rust")
         assert len(hits) >= 1
         assert any("Rust" in h["title"] for h in hits)
+
+
+class TestFuzzySearchIndex:
+    """Step 5.3: Fuzzy query using Query.fuzzy_term_query."""
+
+    @pytest.fixture()
+    def fuzzy_index(self, tmp_path):
+        fields = [
+            TextField(name="title"),
+            TextField(name="body"),
+            KeywordField(name="id"),
+        ]
+        docs = [
+            {"id": "1", "title": "Python Tutorial", "body": "Learn Python programming"},
+            {"id": "2", "title": "FastAPI Guide", "body": "Build APIs with FastAPI"},
+            {"id": "3", "title": "Rust Handbook", "body": "Systems programming with Rust"},
+            {"id": "4", "title": "pandas Cookbook", "body": "Data analysis with pandas"},
+        ]
+        index = open_index(tmp_path / "index", fields)
+        write_documents(index, docs)
+        return index, fields
+
+    def test_typo_tolerance(self, fuzzy_index):
+        """'pythn' (missing 'o') should match 'python'."""
+        index, fields = fuzzy_index
+        hits = fuzzy_search_index(index, fields, "pythn", distance=1)
+        assert len(hits) >= 1
+        assert any("Python" in h["title"] for h in hits)
+
+    def test_transposition(self, fuzzy_index):
+        """'pyhton' (transposed 'th') should match 'python'."""
+        index, fields = fuzzy_index
+        hits = fuzzy_search_index(index, fields, "pyhton", distance=1)
+        assert len(hits) >= 1
+
+    def test_distance_2(self, fuzzy_index):
+        """Two-char edit: 'pythn' → 'python' (distance=2 should also work)."""
+        index, fields = fuzzy_index
+        hits = fuzzy_search_index(index, fields, "pythn", distance=2)
+        assert len(hits) >= 1
+
+    def test_exact_match_still_works(self, fuzzy_index):
+        index, fields = fuzzy_index
+        hits = fuzzy_search_index(index, fields, "python")
+        assert len(hits) >= 1
+
+    def test_no_match(self, fuzzy_index):
+        index, fields = fuzzy_index
+        hits = fuzzy_search_index(index, fields, "xyzxyz")
+        assert hits == []
+
+    def test_no_text_fields_returns_empty(self, tmp_path):
+        """Fuzzy only works on TextField; NgramField/KeywordField are skipped."""
+        fields = [NgramField(name="title"), KeywordField(name="id")]
+        index = open_index(tmp_path / "index", fields)
+        write_documents(index, [{"title": "Python", "id": "1"}])
+        hits = fuzzy_search_index(index, fields, "pythn")
+        assert hits == []
+
+    def test_multi_field_fuzzy(self, fuzzy_index):
+        """Fuzzy queries across multiple TextFields are OR-combined."""
+        index, fields = fuzzy_index
+        # "programing" (one 'm') should match "programming" in body
+        hits = fuzzy_search_index(index, fields, "programing", distance=1)
+        assert len(hits) >= 1
+
+    def test_boost_affects_ranking(self, tmp_path):
+        """Higher-boosted TextField should rank its matches higher."""
+        fields = [
+            TextField(name="title", boost=5.0),
+            TextField(name="body", boost=1.0),
+            KeywordField(name="id"),
+        ]
+        docs = [
+            {"id": "1", "title": "Rust guide", "body": "Learn python basics"},
+            {"id": "2", "title": "python guide", "body": "Learn rust basics"},
+        ]
+        index = open_index(tmp_path / "index", fields)
+        write_documents(index, docs)
+        hits = fuzzy_search_index(index, fields, "python")
+        assert len(hits) == 2
+        assert hits[0]["id"] == "2"
+
+    def test_limit_respected(self, fuzzy_index):
+        index, fields = fuzzy_index
+        hits = fuzzy_search_index(index, fields, "python", limit=1)
+        assert len(hits) <= 1
+
+
+class TestSortHits:
+    """Step 5.4: _sort_hits pure function."""
+
+    HITS = [
+        {"title": "A", "year": 2020, "rating": 4.5, "_score": 1.0},
+        {"title": "B", "year": 2025, "rating": 4.9, "_score": 2.0},
+        {"title": "C", "year": 2025, "rating": 4.3, "_score": 3.0},
+        {"title": "D", "year": 2022, "rating": 4.5, "_score": 4.0},
+    ]
+
+    def test_single_field_desc(self):
+        result = _sort_hits(list(self.HITS), [SortKey(name="year")], limit=10)
+        years = [h["year"] for h in result]
+        assert years == [2025, 2025, 2022, 2020]
+
+    def test_single_field_asc(self):
+        result = _sort_hits(
+            list(self.HITS), [SortKey(name="year", descending=False)], limit=10
+        )
+        years = [h["year"] for h in result]
+        assert years == [2020, 2022, 2025, 2025]
+
+    def test_multi_field_sort(self):
+        """Primary: year DESC, secondary: rating DESC."""
+        result = _sort_hits(
+            list(self.HITS),
+            [SortKey(name="year"), SortKey(name="rating")],
+            limit=10,
+        )
+        assert [(h["year"], h["rating"]) for h in result] == [
+            (2025, 4.9),
+            (2025, 4.3),
+            (2022, 4.5),
+            (2020, 4.5),
+        ]
+
+    def test_mixed_directions(self):
+        """Primary: year ASC, secondary: rating DESC."""
+        result = _sort_hits(
+            list(self.HITS),
+            [SortKey(name="year", descending=False), SortKey(name="rating")],
+            limit=10,
+        )
+        assert [(h["year"], h["rating"]) for h in result] == [
+            (2020, 4.5),
+            (2022, 4.5),
+            (2025, 4.9),
+            (2025, 4.3),
+        ]
+
+    def test_limit_truncates(self):
+        result = _sort_hits(list(self.HITS), [SortKey(name="year")], limit=2)
+        assert len(result) == 2
+
+    def test_empty_hits(self):
+        result = _sort_hits([], [SortKey(name="year")], limit=10)
+        assert result == []
+
+
+class TestSearchIndexSorted:
+    """Step 5.4: search_index_sorted end-to-end."""
+
+    @pytest.fixture()
+    def sorted_index(self, tmp_path):
+        fields = [
+            NgramField(name="title", min_gram=2, max_gram=6),
+            TextField(name="body"),
+            NumericField(name="year", kind="i64", indexed=False, fast=True),
+            NumericField(name="rating", kind="f64", indexed=False, fast=True),
+            KeywordField(name="id"),
+        ]
+        docs = [
+            {"id": "1", "title": "Python Tutorial", "body": "Learn Python", "year": 2020, "rating": 4.5},
+            {"id": "2", "title": "Python Guide", "body": "Advanced Python", "year": 2025, "rating": 4.9},
+            {"id": "3", "title": "Python Cookbook", "body": "Python recipes", "year": 2025, "rating": 4.3},
+            {"id": "4", "title": "Python Deep Dive", "body": "Python internals", "year": 2022, "rating": 4.8},
+        ]
+        index = open_index(tmp_path / "index", fields)
+        write_documents(index, docs)
+        return index, fields
+
+    def test_sort_by_year_desc(self, sorted_index):
+        index, fields = sorted_index
+        hits = search_index_sorted(
+            index, fields, "python",
+            sort_keys=[SortKey(name="year")],
+        )
+        years = [h["year"] for h in hits]
+        assert years == sorted(years, reverse=True)
+
+    def test_sort_by_year_asc(self, sorted_index):
+        index, fields = sorted_index
+        hits = search_index_sorted(
+            index, fields, "python",
+            sort_keys=[SortKey(name="year", descending=False)],
+        )
+        years = [h["year"] for h in hits]
+        assert years == sorted(years)
+
+    def test_multi_field_sort(self, sorted_index):
+        """year DESC then rating DESC."""
+        index, fields = sorted_index
+        hits = search_index_sorted(
+            index, fields, "python",
+            sort_keys=[SortKey(name="year"), SortKey(name="rating")],
+        )
+        pairs = [(h["year"], h["rating"]) for h in hits]
+        # 2025 group first (desc), within 2025: 4.9 > 4.3
+        assert pairs[0] == (2025, 4.9)
+        assert pairs[1] == (2025, 4.3)
+
+    def test_limit_respected(self, sorted_index):
+        index, fields = sorted_index
+        hits = search_index_sorted(
+            index, fields, "python",
+            sort_keys=[SortKey(name="year")],
+            limit=2,
+        )
+        assert len(hits) == 2
+
+    def test_sortkey_model(self):
+        sk = SortKey(name="year", descending=True)
+        assert sk.name == "year"
+        assert sk.descending is True
+
+        sk2 = SortKey(name="rating")
+        assert sk2.descending is True  # default
 
 
 if __name__ == "__main__":
