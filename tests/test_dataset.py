@@ -377,6 +377,18 @@ class TestFuzzySearchIndex:
         hits = fuzzy_search_index(index, fields, "python", limit=1)
         assert len(hits) <= 1
 
+    def test_multi_word_query(self, fuzzy_index):
+        """'pythn tutoral' should match 'Python Tutorial' (two fuzzy terms)."""
+        index, fields = fuzzy_index
+        hits = fuzzy_search_index(index, fields, "pythn tutoral", distance=1)
+        assert len(hits) >= 1
+        assert any("Python" in h["title"] for h in hits)
+
+    def test_empty_query(self, fuzzy_index):
+        index, fields = fuzzy_index
+        hits = fuzzy_search_index(index, fields, "")
+        assert hits == []
+
 
 class TestSortHits:
     """Step 5.4: _sort_hits pure function."""
@@ -435,6 +447,22 @@ class TestSortHits:
     def test_empty_hits(self):
         result = _sort_hits([], [SortKey(name="year")], limit=10)
         assert result == []
+
+    def test_does_not_mutate_input(self):
+        original = list(self.HITS)
+        original_copy = list(original)
+        _sort_hits(original, [SortKey(name="year")], limit=10)
+        assert original == original_copy
+
+    def test_missing_sort_field_defaults_to_zero(self):
+        hits = [
+            {"title": "A", "year": 2025, "_score": 1.0},
+            {"title": "B", "_score": 2.0},  # no "year"
+        ]
+        result = _sort_hits(hits, [SortKey(name="year")], limit=10)
+        # missing year → 0, so it sorts last in DESC
+        assert result[0]["title"] == "A"
+        assert result[1]["title"] == "B"
 
 
 class TestSearchIndexSorted:

@@ -250,19 +250,24 @@ def fuzzy_search_index(
     if not fuzzy_fields:
         return []
 
+    terms = query_str.split()
+    if not terms:
+        return []
+
     sub_queries = []
     for f in fuzzy_fields:
-        q = tantivy.Query.fuzzy_term_query(
-            schema,
-            f.name,
-            query_str,
-            distance=distance,
-            transposition_cost_one=transposition_cost_one,
-            prefix=prefix,
-        )
-        if f.boost != 1.0:
-            q = tantivy.Query.boost_query(q, f.boost)
-        sub_queries.append((tantivy.Occur.Should, q))
+        for term in terms:
+            q = tantivy.Query.fuzzy_term_query(
+                schema,
+                f.name,
+                term,
+                distance=distance,
+                transposition_cost_one=transposition_cost_one,
+                prefix=prefix,
+            )
+            if f.boost != 1.0:
+                q = tantivy.Query.boost_query(q, f.boost)
+            sub_queries.append((tantivy.Occur.Should, q))
 
     query = tantivy.Query.boolean_query(sub_queries)
     searcher = index.searcher()
@@ -284,13 +289,14 @@ def _sort_hits(
     directions, so we sort in successive passes (least-significant key first).
     """
     # Sort by successive keys, least significant first (stable sort preserves
-    # earlier ordering for ties).
+    # earlier ordering for ties).  Work on a copy to avoid mutating the input.
+    result = list(hits)
     for sk in reversed(sort_keys):
-        hits.sort(
+        result.sort(
             key=lambda h, _name=sk.name: h.get(_name, 0),
             reverse=sk.descending,
         )
-    return hits[:limit]
+    return result[:limit]
 
 
 def search_index_sorted(
