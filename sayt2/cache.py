@@ -17,9 +17,12 @@ key prefixes and linked by a shared tag for bulk eviction.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Optional
 
 import diskcache
+
+if TYPE_CHECKING:
+    from .dataset import SearchResponse
 
 
 class DataSetCache:
@@ -79,18 +82,16 @@ class DataSetCache:
 
     # -- Layer 2: query result cache ------------------------------------------
 
-    _SENTINEL = object()
-
-    def get_query_result(self, query: str, limit: int) -> Optional[Any]:
+    def get_query_result(self, query: str, limit: int) -> Optional[SearchResponse]:
         """
         Return the cached result for *(query, limit)*, or ``None`` on miss.
-        """
-        value = self._cache.get(self._query_key(query, limit), self._SENTINEL)
-        if value is self._SENTINEL:
-            return None
-        return value
 
-    def set_query_result(self, query: str, limit: int, result: Any) -> None:
+        Query results are always ``SearchResponse`` objects (never ``None``),
+        so a ``None`` return unambiguously means cache miss.
+        """
+        return self._cache.get(self._query_key(query, limit))
+
+    def set_query_result(self, query: str, limit: int, result: SearchResponse) -> None:
         """
         Cache a query result.  L2 entries never expire on their own — they
         are bulk-evicted when L1 triggers a rebuild via :meth:`evict_all`.

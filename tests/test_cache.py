@@ -71,15 +71,11 @@ class TestQueryCache:
         cache.set_query_result("python", 10, {"hits": []})
         assert cache.get_query_result("python", 20) is None
 
-    def test_none_result_is_cacheable(self, cache):
-        """A cached None should not be confused with a cache miss."""
-        cache.set_query_result("empty", 10, None)
-        # miss returns None too, so we verify via a round-trip:
-        # set a real value, overwrite with None, then get should return None
-        cache.set_query_result("key", 10, "value")
-        cache.set_query_result("key", 10, None)
-        # Since our get uses a sentinel, this should return None (the cached value)
-        assert cache.get_query_result("key", 10) is None
+    def test_overwrite(self, cache):
+        """Setting the same key twice overwrites the old value."""
+        cache.set_query_result("python", 10, {"v": 1})
+        cache.set_query_result("python", 10, {"v": 2})
+        assert cache.get_query_result("python", 10) == {"v": 2}
 
 
 class TestEviction:
