@@ -14,6 +14,7 @@ definitions to tantivy schema objects lives in ``dataset.py``.
 from __future__ import annotations
 
 import hashlib
+import json
 from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, Field, model_validator
@@ -150,6 +151,6 @@ def fields_schema_hash(fields: list[T_Field]) -> str:  # type: ignore[type-arg]
     invalidates stale caches.
     """
     payload = "|".join(
-        f.model_dump_json(exclude_none=True) for f in fields
+        json.dumps(f.model_dump(exclude_none=True), sort_keys=True) for f in fields
     )
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
