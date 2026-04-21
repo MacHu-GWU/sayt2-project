@@ -14,6 +14,7 @@ from sayt2.fields import (
     DatetimeField,
     BooleanField,
 )
+from sayt2.exc import TrackerIsLockedError
 from sayt2.dataset import (
     build_schema,
     open_index,
@@ -24,6 +25,8 @@ from sayt2.dataset import (
     _collect_search_config,
     _sort_hits,
     SortKey,
+    SearchResponse,
+    DataSet,
 )
 
 
@@ -533,6 +536,180 @@ class TestSearchIndexSorted:
 
         sk2 = SortKey(name="rating")
         assert sk2.descending is True  # default
+
+
+class TestSearchResponse:
+    """Step 5.6: SearchResponse immutable model."""
+
+    def test_creation(self):
+        r = SearchResponse(
+            hits=[{"title": "A", "_score": 1.0}],
+            size=1,
+            took_ms=5,
+            fresh=True,
+            cache=False,
+        )
+        assert r.size == 1
+        assert r.fresh is True
+        assert r.cache is False
+
+    def test_frozen(self):
+        r = SearchResponse(hits=[], size=0, took_ms=0, fresh=False, cache=False)
+        with pytest.raises(Exception):
+            r.size = 99  # type: ignore[misc]
+
+
+class TestDataSet:
+    """Step 5.5: DataSet integration with cache + tracker."""
+
+    FIELDS = [
+        NgramField(name="title", min_gram=2, max_gram=6),
+        TextField(name="body"),
+        KeywordField(name="id"),
+        NumericField(name="year", kind="i64", indexed=False, fast=True),
+    ]
+
+    DOCS = [
+        {"id": "1", "title": "Python Tutorial", "body": "Learn Python programming", "year": 2024},
+        {"id": "2", "title": "FastAPI Guide", "body": "Build APIs with FastAPI", "year": 2023},
+        {"id": "3", "title": "Rust Handbook", "body": "Systems programming with Rust", "year": 2025},
+    ]
+
+    def _make_ds(self, tmp_path, **kwargs):
+        defaults = dict(
+            dir_root=tmp_path,
+            name="books",
+            fields=self.FIELDS,
+        )
+        defaults.update(kwargs)
+        return DataSet(**defaults)
+
+    # -- build_index ----------------------------------------------------------
+
+    def test_build_index_with_data(self, tmp_path):
+        ds = self._make_ds(tmp_path)
+        count = ds.build_index(data=self.DOCS)
+        assert count == 3
+
+    def test_build_index_with_downloader(self, tmp_path):
+        ds = self._make_ds(tmp_path, downloader=lambda: self.DOCS)
+        count = ds.build_index()
+        assert count == 3
+
+    def test_build_index_no_data_no_downloader(self, tmp_path):
+        ds = self._make_ds(tmp_path)
+        with pytest.raises(ValueError, match="data or downloader"):
+            ds.build_index()
+
+    # -- search ---------------------------------------------------------------
+
+    def test_first_search_triggers_download(self, tmp_path):
+        call_count = {"n": 0}
+
+        def downloader():
+            call_count["n"] += 1
+            return self.DOCS
+
+        ds = self._make_ds(tmp_path, downloader=downloader)
+        result = ds.search("python")
+        assert isinstance(result, SearchResponse)
+        assert result.fresh is True
+        assert result.cache is False
+        assert result.size >= 1
+        assert call_count["n"] == 1
+
+    def test_second_search_hits_cache(self, tmp_path):
+        ds = self._make_ds(tmp_path, downloader=lambda: self.DOCS)
+        r1 = ds.search("python")
+        assert r1.cache is False
+
+        r2 = ds.search("python")
+        assert r2.cache is True
+        assert r2.size == r1.size
+
+    def test_different_query_misses_cache(self, tmp_path):
+        ds = self._make_ds(tmp_path, downloader=lambda: self.DOCS)
+        ds.search("python")
+        r2 = ds.search("rust")
+        assert r2.cache is False
+
+    def test_refresh_forces_rebuild(self, tmp_path):
+        call_count = {"n": 0}
+
+        def downloader():
+            call_count["n"] += 1
+            return self.DOCS
+
+        ds = self._make_ds(tmp_path, downloader=downloader)
+        ds.search("python")
+        assert call_count["n"] == 1
+
+        ds.search("python", refresh=True)
+        assert call_count["n"] == 2
+
+    def test_stale_data_no_downloader_raises(self, tmp_path):
+        ds = self._make_ds(tmp_path)
+        with pytest.raises(ValueError, match="no downloader"):
+            ds.search("python")
+
+    def test_search_response_has_took_ms(self, tmp_path):
+        ds = self._make_ds(tmp_path, downloader=lambda: self.DOCS)
+        r = ds.search("python")
+        assert r.took_ms >= 0
+
+    def test_search_with_limit(self, tmp_path):
+        ds = self._make_ds(tmp_path, downloader=lambda: self.DOCS)
+        r = ds.search("python", limit=1)
+        assert r.size <= 1
+
+    # -- sort integration -----------------------------------------------------
+
+    def test_search_with_sort(self, tmp_path):
+        ds = self._make_ds(
+            tmp_path,
+            downloader=lambda: self.DOCS,
+            sort=[SortKey(name="year")],
+        )
+        r = ds.search("python")
+        if r.size >= 2:
+            years = [h["year"] for h in r.hits]
+            assert years == sorted(years, reverse=True)
+
+    # -- tracker integration --------------------------------------------------
+
+    def test_concurrent_build_raises(self, tmp_path):
+        ds = self._make_ds(tmp_path, lock_expire=10)
+        tracker = ds._get_tracker()
+        # hold the lock externally
+        token = tracker.lock_it(ds.name, expire=10)
+        try:
+            with pytest.raises(TrackerIsLockedError):
+                ds.build_index(data=self.DOCS)
+        finally:
+            tracker.unlock_it(ds.name, token)
+
+    # -- cache + schema hash --------------------------------------------------
+
+    def test_schema_change_invalidates_cache(self, tmp_path):
+        ds1 = self._make_ds(tmp_path, downloader=lambda: self.DOCS)
+        r1 = ds1.search("python")
+        assert r1.cache is False
+
+        # same query, same dataset — should hit cache
+        r2 = ds1.search("python")
+        assert r2.cache is True
+
+        # change fields → new schema hash → cache miss
+        new_fields = list(self.FIELDS) + [TextField(name="extra")]
+        new_docs = [dict(d, extra="x") for d in self.DOCS]
+        ds2 = self._make_ds(
+            tmp_path,
+            fields=new_fields,
+            downloader=lambda: new_docs,
+        )
+        r3 = ds2.search("python")
+        assert r3.fresh is True
+        assert r3.cache is False
 
 
 if __name__ == "__main__":

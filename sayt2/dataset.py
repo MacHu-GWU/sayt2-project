@@ -14,11 +14,13 @@ Responsibilities:
 
 from __future__ import annotations
 
+import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Iterable, Literal
+from typing import Any, Iterable
 
 import tantivy
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from tantivy import (
     Filter,
     Index,
@@ -27,6 +29,7 @@ from tantivy import (
     Tokenizer,
 )
 
+from .cache import DataSetCache
 from .fields import (
     T_Field,
     BaseField,
@@ -37,7 +40,9 @@ from .fields import (
     NumericField,
     DatetimeField,
     BooleanField,
+    fields_schema_hash,
 )
+from .tracker import Tracker
 
 
 class SortKey(BaseModel):
@@ -45,6 +50,18 @@ class SortKey(BaseModel):
 
     name: str
     descending: bool = True
+
+
+class SearchResponse(BaseModel):
+    """Immutable search result returned by :meth:`DataSet.search`."""
+
+    model_config = ConfigDict(frozen=True)
+
+    hits: list[dict[str, Any]]
+    size: int
+    took_ms: int
+    fresh: bool
+    cache: bool
 
 
 def _ngram_tokenizer_name(f: NgramField) -> str:
@@ -320,3 +337,177 @@ def search_index_sorted(
     over_limit = limit * over_fetch_factor
     hits = search_index(index, fields, query_str, limit=over_limit)
     return _sort_hits(hits, sort_keys, limit)
+
+
+# ---------------------------------------------------------------------------
+# DataSet — high-level integration of index + cache + tracker
+# ---------------------------------------------------------------------------
+
+
+class DataSet(BaseModel):
+    """
+    High-level search dataset that integrates index building, caching,
+    cross-process locking, and query execution into a single object.
+
+    :param dir_root: Root directory; index, cache, and tracker DB are stored
+        inside sub-directories of this path.
+    :param name: Logical name (e.g. ``"books"``).  Used as the tracker lock
+        key and cache namespace.
+    :param fields: Field definitions that determine the tantivy schema.
+    :param downloader: Optional callable that returns an iterable of document
+        dicts.  Called when the data is stale or on first search.
+    :param cache_expire: Seconds before L1 cache expires (``None`` = never).
+    :param sort: Optional multi-field sort specification.
+    :param memory_budget_bytes: Heap budget for the tantivy index writer.
+    :param num_threads: Number of indexing threads (``None`` = tantivy default).
+    :param lock_expire: Seconds before the tracker lock expires.
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    dir_root: Path
+    name: str
+    fields: list[T_Field]  # type: ignore[type-arg]
+
+    downloader: Callable[[], Iterable[dict[str, Any]]] | None = None
+    cache_expire: int | None = None
+    sort: list[SortKey] | None = None
+
+    memory_budget_bytes: int = 128_000_000
+    num_threads: int | None = None
+    lock_expire: int = 60
+
+    # -- derived paths --------------------------------------------------------
+
+    @property
+    def _dir_index(self) -> Path:
+        return self.dir_root / self.name / f"index-{self._schema_hash}"
+
+    @property
+    def _dir_cache(self) -> Path:
+        return self.dir_root / self.name / "cache"
+
+    @property
+    def _db_tracker(self) -> Path:
+        return self.dir_root / "tracker.db"
+
+    @property
+    def _schema_hash(self) -> str:
+        return fields_schema_hash(self.fields)
+
+    # -- internal helpers -----------------------------------------------------
+
+    def _open_index(self) -> Index:
+        return open_index(self._dir_index, self.fields)
+
+    def _get_cache(self) -> DataSetCache:
+        return DataSetCache(
+            self._dir_cache,
+            self.name,
+            self._schema_hash,
+            expire=self.cache_expire,
+        )
+
+    def _get_tracker(self) -> Tracker:
+        return Tracker(self._db_tracker)
+
+    # -- public API -----------------------------------------------------------
+
+    def build_index(
+        self,
+        data: Iterable[dict[str, Any]] | None = None,
+    ) -> int:
+        """
+        Build (or rebuild) the index with tracker lock protection.
+
+        If *data* is ``None``, the :attr:`downloader` is called.  Raises
+        ``ValueError`` if both are ``None``.
+
+        :returns: Number of documents indexed.
+        """
+        if data is None:
+            if self.downloader is None:
+                raise ValueError("Either data or downloader must be provided")
+            data = self.downloader()
+
+        tracker = self._get_tracker()
+        cache = self._get_cache()
+        with tracker.lock(self.name, expire=self.lock_expire):
+            cache.evict_all()
+            index = self._open_index()
+            count = write_documents(
+                index, data,
+                memory_budget_bytes=self.memory_budget_bytes,
+                num_threads=self.num_threads,
+            )
+            cache.mark_fresh()
+        cache.close()
+        return count
+
+    def search(
+        self,
+        query: str,
+        limit: int = 20,
+        refresh: bool = False,
+    ) -> SearchResponse:
+        """
+        Full search flow:
+
+        1. Check L1 freshness (or ``refresh=True`` forces rebuild).
+        2. If stale, call :meth:`build_index` with :attr:`downloader`.
+        3. Check L2 query cache.
+        4. On cache miss, execute the query, apply sorting, cache the result.
+
+        :param query: Query string.
+        :param limit: Maximum number of hits.
+        :param refresh: Force a data refresh even if the cache is fresh.
+        """
+        t0 = time.monotonic()
+        cache = self._get_cache()
+        fresh = False
+
+        # Step 1-2: ensure data is fresh
+        if refresh or not cache.is_fresh():
+            if self.downloader is None:
+                raise ValueError(
+                    "Data is stale but no downloader is configured"
+                )
+            self.build_index()
+            fresh = True
+
+        # Step 3: check query cache
+        cached = cache.get_query_result(query, limit)
+        if cached is not None:
+            cache.close()
+            return cached
+
+        # Step 4: execute query
+        index = self._open_index()
+        if self.sort:
+            hits = search_index_sorted(
+                index, self.fields, query,
+                sort_keys=self.sort, limit=limit,
+            )
+        else:
+            hits = search_index(index, self.fields, query, limit=limit)
+
+        took_ms = int((time.monotonic() - t0) * 1000)
+        response = SearchResponse(
+            hits=hits,
+            size=len(hits),
+            took_ms=took_ms,
+            fresh=fresh,
+            cache=False,
+        )
+
+        # cache with cache=True so subsequent reads get the cached flag
+        cached_response = SearchResponse(
+            hits=hits,
+            size=len(hits),
+            took_ms=took_ms,
+            fresh=fresh,
+            cache=True,
+        )
+        cache.set_query_result(query, limit, cached_response)
+        cache.close()
+        return response
