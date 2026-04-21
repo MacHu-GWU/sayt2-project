@@ -445,16 +445,18 @@ class DataSet(BaseModel):
 
         tracker = self._get_tracker()
         cache = self._get_cache()
-        with tracker.lock(self.name, expire=self.lock_expire):
-            cache.evict_all()
-            index = self._open_index()
-            count = write_documents(
-                index, data,
-                memory_budget_bytes=self.memory_budget_bytes,
-                num_threads=self.num_threads,
-            )
-            cache.mark_fresh()
-        cache.close()
+        try:
+            with tracker.lock(self.name, expire=self.lock_expire):
+                cache.evict_all()
+                index = self._open_index()
+                count = write_documents(
+                    index, data,
+                    memory_budget_bytes=self.memory_budget_bytes,
+                    num_threads=self.num_threads,
+                )
+                cache.mark_fresh()
+        finally:
+            cache.close()
         return count
 
     def search(
@@ -477,50 +479,51 @@ class DataSet(BaseModel):
         """
         t0 = time.monotonic()
         cache = self._get_cache()
-        fresh = False
+        try:
+            fresh = False
 
-        # Step 1-2: ensure data is fresh
-        if refresh or not cache.is_fresh():
-            if self.downloader is None:
-                raise ValueError(
-                    "Data is stale but no downloader is configured"
+            # Step 1-2: ensure data is fresh
+            if refresh or not cache.is_fresh():
+                if self.downloader is None:
+                    raise ValueError(
+                        "Data is stale but no downloader is configured"
+                    )
+                self.build_index()
+                fresh = True
+
+            # Step 3: check query cache
+            cached = cache.get_query_result(query, limit)
+            if cached is not None:
+                return cached
+
+            # Step 4: execute query
+            index = self._open_index()
+            if self.sort:
+                hits = search_index_sorted(
+                    index, self.fields, query,
+                    sort_keys=self.sort, limit=limit,
                 )
-            self.build_index()
-            fresh = True
+            else:
+                hits = search_index(index, self.fields, query, limit=limit)
 
-        # Step 3: check query cache
-        cached = cache.get_query_result(query, limit)
-        if cached is not None:
-            cache.close()
-            return cached
-
-        # Step 4: execute query
-        index = self._open_index()
-        if self.sort:
-            hits = search_index_sorted(
-                index, self.fields, query,
-                sort_keys=self.sort, limit=limit,
+            took_ms = int((time.monotonic() - t0) * 1000)
+            response = SearchResponse(
+                hits=hits,
+                size=len(hits),
+                took_ms=took_ms,
+                fresh=fresh,
+                cache=False,
             )
-        else:
-            hits = search_index(index, self.fields, query, limit=limit)
 
-        took_ms = int((time.monotonic() - t0) * 1000)
-        response = SearchResponse(
-            hits=hits,
-            size=len(hits),
-            took_ms=took_ms,
-            fresh=fresh,
-            cache=False,
-        )
-
-        # cache with cache=True so subsequent reads get the cached flag
-        cached_response = SearchResponse(
-            hits=hits,
-            size=len(hits),
-            took_ms=took_ms,
-            fresh=fresh,
-            cache=True,
-        )
-        cache.set_query_result(query, limit, cached_response)
-        cache.close()
-        return response
+            # cache with cache=True so subsequent reads get the cached flag
+            cached_response = SearchResponse(
+                hits=hits,
+                size=len(hits),
+                took_ms=took_ms,
+                fresh=fresh,
+                cache=True,
+            )
+            cache.set_query_result(query, limit, cached_response)
+            return response
+        finally:
+            cache.close()

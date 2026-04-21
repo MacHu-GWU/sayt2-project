@@ -118,7 +118,7 @@ def test():
         sort=[SortKey(name="rating"), SortKey(name="year")],
     )
     r = ds_multi.search("python")
-    r.jprint()  # for debug only
+    # r.jprint()  # for debug only
     assert r.size >= 2
     # primary sort: ratings must be non-increasing
     ratings = [h.source["rating"] for h in r.hits]
