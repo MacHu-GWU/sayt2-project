@@ -1,0 +1,154 @@
+{
+    "records": [
+        {
+            "id": "1",
+            "title": "Python Crash Course",
+            "author": "Eric Matthes",
+            "description": "A hands-on project-based introduction to programming with Python for absolute beginners.",
+            "year": 2019,
+            "price": 25.99,
+            "rating": 4.7,
+            "pages": 544
+        },
+        {
+            "id": "2",
+            "title": "Fluent Python",
+            "author": "Luciano Ramalho",
+            "description": "Clear concise and effective programming with advanced Python features and idioms.",
+            "year": 2022,
+            "price": 49.99,
+            "rating": 4.8,
+            "pages": 792
+        },
+        {
+            "id": "3",
+            "title": "Python Cookbook",
+            "author": "David Beazley",
+            "description": "Recipes for mastering Python covering data structures algorithms and concurrency.",
+            "year": 2013,
+            "price": 39.99,
+            "rating": 4.6,
+            "pages": 706
+        },
+        {
+            "id": "4",
+            "title": "Effective Python",
+            "author": "Brett Slatkin",
+            "description": "Ninety specific ways to write better Python code with best practices.",
+            "year": 2020,
+            "price": 34.99,
+            "rating": 4.7,
+            "pages": 480
+        },
+        {
+            "id": "5",
+            "title": "Learning Rust",
+            "author": "Jim Blandy",
+            "description": "An introduction to systems programming with Rust focusing on safety and performance.",
+            "year": 2021,
+            "price": 44.99,
+            "rating": 4.5,
+            "pages": 380
+        },
+        {
+            "id": "6",
+            "title": "Programming Rust",
+            "author": "Jim Blandy",
+            "description": "Fast safe systems development covering ownership concurrency and unsafe code.",
+            "year": 2021,
+            "price": 54.99,
+            "rating": 4.6,
+            "pages": 622
+        },
+        {
+            "id": "7",
+            "title": "The Rust Programming Language",
+            "author": "Steve Klabnik",
+            "description": "The official Rust book covering all language features from basics to advanced topics.",
+            "year": 2023,
+            "price": 39.99,
+            "rating": 4.9,
+            "pages": 560
+        },
+        {
+            "id": "8",
+            "title": "FastAPI Modern Python",
+            "author": "Bill Lubanovic",
+            "description": "Building web APIs with FastAPI using modern Python type hints and async features.",
+            "year": 2023,
+            "price": 42.99,
+            "rating": 4.3,
+            "pages": 320
+        },
+        {
+            "id": "9",
+            "title": "Architecture Patterns with Python",
+            "author": "Harry Percival",
+            "description": "Enabling test driven development domain driven design and event driven microservices.",
+            "year": 2020,
+            "price": 37.99,
+            "rating": 4.4,
+            "pages": 290
+        },
+        {
+            "id": "10",
+            "title": "Go Programming Language",
+            "author": "Alan Donovan",
+            "description": "The definitive guide to Go covering the core language standard library and tools.",
+            "year": 2015,
+            "price": 34.99,
+            "rating": 4.7,
+            "pages": 400
+        },
+        {
+            "id": "11",
+            "title": "Concurrency in Go",
+            "author": "Katherine Cox-Buday",
+            "description": "Tools and techniques for building concurrent applications with goroutines and channels.",
+            "year": 2017,
+            "price": 29.99,
+            "rating": 4.5,
+            "pages": 238
+        },
+        {
+            "id": "12",
+            "title": "JavaScript The Good Parts",
+            "author": "Douglas Crockford",
+            "description": "Unearthing the excellence in JavaScript and the subset of features worth using.",
+            "year": 2008,
+            "price": 19.99,
+            "rating": 4.3,
+            "pages": 176
+        },
+        {
+            "id": "13",
+            "title": "Eloquent JavaScript",
+            "author": "Marijn Haverbeke",
+            "description": "A modern introduction to programming covering JavaScript the browser and Node.",
+            "year": 2018,
+            "price": 27.99,
+            "rating": 4.6,
+            "pages": 472
+        },
+        {
+            "id": "14",
+            "title": "Designing Data Intensive Applications",
+            "author": "Martin Kleppmann",
+            "description": "The big ideas behind reliable scalable and maintainable distributed systems.",
+            "year": 2017,
+            "price": 44.99,
+            "rating": 4.9,
+            "pages": 616
+        },
+        {
+            "id": "15",
+            "title": "Clean Code",
+            "author": "Robert Martin",
+            "description": "A handbook of agile software craftsmanship covering naming functions and testing.",
+            "year": 2008,
+            "price": 32.99,
+            "rating": 4.4,
+            "pages": 464
+        }
+    ]
+}

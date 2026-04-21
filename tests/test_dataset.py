@@ -295,6 +295,86 @@ class TestSearchIndex:
         assert any("Rust" in h.source["title"] for h in hits)
 
 
+class TestRangeQuery:
+    """Range queries via tantivy's query language on indexed numeric fields."""
+
+    @pytest.fixture()
+    def range_index(self, tmp_path):
+        fields = [
+            NgramField(name="title", min_gram=2, max_gram=6),
+            KeywordField(name="id"),
+            NumericField(name="year", kind="i64", indexed=True, fast=True),
+            NumericField(name="price", kind="f64", indexed=True, fast=True),
+        ]
+        docs = [
+            {"id": "1", "title": "Python Basics", "year": 2018, "price": 19.99},
+            {"id": "2", "title": "Python Advanced", "year": 2020, "price": 39.99},
+            {"id": "3", "title": "Python Cookbook", "year": 2022, "price": 49.99},
+            {"id": "4", "title": "Rust Handbook", "year": 2023, "price": 59.99},
+            {"id": "5", "title": "Rust Systems", "year": 2025, "price": 29.99},
+        ]
+        index = open_index(tmp_path / "index", fields)
+        write_documents(index, docs)
+        return index, fields
+
+    def test_inclusive_range(self, range_index):
+        """year:[2020 TO 2023] should match docs with year 2020, 2022, 2023."""
+        index, fields = range_index
+        hits = search_index(index, fields, "year:[2020 TO 2023]")
+        assert len(hits) == 3
+        years = {h.source["year"] for h in hits}
+        assert years == {2020, 2022, 2023}
+
+    def test_gt_operator(self, range_index):
+        """year:>2022 should match 2023 and 2025."""
+        index, fields = range_index
+        hits = search_index(index, fields, "year:>2022")
+        assert len(hits) == 2
+        years = {h.source["year"] for h in hits}
+        assert years == {2023, 2025}
+
+    def test_lt_operator(self, range_index):
+        """year:<2020 should match only 2018."""
+        index, fields = range_index
+        hits = search_index(index, fields, "year:<2020")
+        assert len(hits) == 1
+        assert hits[0].source["year"] == 2018
+
+    def test_float_range(self, range_index):
+        """price:[20 TO 50] should match 29.99, 39.99, 49.99."""
+        index, fields = range_index
+        hits = search_index(index, fields, "price:[20 TO 50]")
+        assert len(hits) == 3
+        prices = {h.source["price"] for h in hits}
+        assert prices == {29.99, 39.99, 49.99}
+
+    def test_range_and_text_combined(self, range_index):
+        """python AND year:[2020 TO 2025] should match only Python books after 2020."""
+        index, fields = range_index
+        hits = search_index(index, fields, "python AND year:[2020 TO 2025]")
+        assert len(hits) >= 1
+        for h in hits:
+            assert "Python" in h.source["title"]
+            assert 2020 <= h.source["year"] <= 2025
+
+    def test_range_no_results(self, range_index):
+        """year:[2030 TO 2040] should return nothing."""
+        index, fields = range_index
+        hits = search_index(index, fields, "year:[2030 TO 2040]")
+        assert hits == []
+
+    def test_fast_field_range_still_works(self, tmp_path):
+        """Range query works on fast=True fields even when indexed=False."""
+        fields = [
+            TextField(name="title"),
+            NumericField(name="year", kind="i64", indexed=False, fast=True),
+        ]
+        index = open_index(tmp_path / "index", fields)
+        write_documents(index, [{"title": "Test", "year": 2024}])
+        hits = search_index(index, fields, "year:[2020 TO 2025]")
+        assert len(hits) == 1
+
+
 class TestFuzzySearchIndex:
     """Step 5.3: Fuzzy query using Query.fuzzy_term_query."""
 
