@@ -25,6 +25,7 @@ from sayt2.dataset import (
     _collect_search_config,
     _sort_hits,
     SortKey,
+    Hit,
     SearchResponse,
     DataSet,
 )
@@ -231,26 +232,26 @@ class TestSearchIndex:
     def test_basic_text_search(self, indexed):
         hits = search_index(indexed, SAMPLE_FIELDS, "python")
         assert len(hits) >= 1
-        titles = [h["title"] for h in hits]
+        titles = [h.source["title"] for h in hits]
         assert any("Python" in t for t in titles)
 
     def test_hit_has_score(self, indexed):
         hits = search_index(indexed, SAMPLE_FIELDS, "python")
-        assert all("_score" in h for h in hits)
-        assert all(isinstance(h["_score"], float) for h in hits)
+        assert all(isinstance(h, Hit) for h in hits)
+        assert all(isinstance(h.score, float) for h in hits)
 
     def test_hit_contains_stored_fields(self, indexed):
         hits = search_index(indexed, SAMPLE_FIELDS, "python")
         hit = hits[0]
-        assert "id" in hit
-        assert "title" in hit
-        assert "body" in hit
+        assert "id" in hit.source
+        assert "title" in hit.source
+        assert "body" in hit.source
 
     def test_ngram_substring_search(self, indexed):
         """Ngram field allows matching partial words like 'pyth'."""
         hits = search_index(indexed, SAMPLE_FIELDS, "pyth")
         assert len(hits) >= 1
-        assert any("Python" in h["title"] for h in hits)
+        assert any("Python" in h.source["title"] for h in hits)
 
     def test_limit_respected(self, indexed):
         hits = search_index(indexed, SAMPLE_FIELDS, "python", limit=1)
@@ -284,14 +285,14 @@ class TestSearchIndex:
         hits = search_index(index, fields, "python")
         assert len(hits) == 2
         # doc with "Python" in title (boost=5.0) should rank first
-        assert hits[0]["id"] == "2"
+        assert hits[0].source["id"] == "2"
 
     def test_multi_field_search(self, indexed):
         """Query matches across different field types."""
         # "rust" appears in title (ngram) and body (text)
         hits = search_index(indexed, SAMPLE_FIELDS, "rust")
         assert len(hits) >= 1
-        assert any("Rust" in h["title"] for h in hits)
+        assert any("Rust" in h.source["title"] for h in hits)
 
 
 class TestFuzzySearchIndex:
@@ -319,7 +320,7 @@ class TestFuzzySearchIndex:
         index, fields = fuzzy_index
         hits = fuzzy_search_index(index, fields, "pythn", distance=1)
         assert len(hits) >= 1
-        assert any("Python" in h["title"] for h in hits)
+        assert any("Python" in h.source["title"] for h in hits)
 
     def test_transposition(self, fuzzy_index):
         """'pyhton' (transposed 'th') should match 'python'."""
@@ -373,7 +374,7 @@ class TestFuzzySearchIndex:
         write_documents(index, docs)
         hits = fuzzy_search_index(index, fields, "python")
         assert len(hits) == 2
-        assert hits[0]["id"] == "2"
+        assert hits[0].source["id"] == "2"
 
     def test_limit_respected(self, fuzzy_index):
         index, fields = fuzzy_index
@@ -385,7 +386,7 @@ class TestFuzzySearchIndex:
         index, fields = fuzzy_index
         hits = fuzzy_search_index(index, fields, "pythn tutoral", distance=1)
         assert len(hits) >= 1
-        assert any("Python" in h["title"] for h in hits)
+        assert any("Python" in h.source["title"] for h in hits)
 
     def test_empty_query(self, fuzzy_index):
         index, fields = fuzzy_index
@@ -397,22 +398,22 @@ class TestSortHits:
     """Step 5.4: _sort_hits pure function."""
 
     HITS = [
-        {"title": "A", "year": 2020, "rating": 4.5, "_score": 1.0},
-        {"title": "B", "year": 2025, "rating": 4.9, "_score": 2.0},
-        {"title": "C", "year": 2025, "rating": 4.3, "_score": 3.0},
-        {"title": "D", "year": 2022, "rating": 4.5, "_score": 4.0},
+        Hit(source={"title": "A", "year": 2020, "rating": 4.5}, score=1.0),
+        Hit(source={"title": "B", "year": 2025, "rating": 4.9}, score=2.0),
+        Hit(source={"title": "C", "year": 2025, "rating": 4.3}, score=3.0),
+        Hit(source={"title": "D", "year": 2022, "rating": 4.5}, score=4.0),
     ]
 
     def test_single_field_desc(self):
         result = _sort_hits(list(self.HITS), [SortKey(name="year")], limit=10)
-        years = [h["year"] for h in result]
+        years = [h.source["year"] for h in result]
         assert years == [2025, 2025, 2022, 2020]
 
     def test_single_field_asc(self):
         result = _sort_hits(
             list(self.HITS), [SortKey(name="year", descending=False)], limit=10
         )
-        years = [h["year"] for h in result]
+        years = [h.source["year"] for h in result]
         assert years == [2020, 2022, 2025, 2025]
 
     def test_multi_field_sort(self):
@@ -422,7 +423,7 @@ class TestSortHits:
             [SortKey(name="year"), SortKey(name="rating")],
             limit=10,
         )
-        assert [(h["year"], h["rating"]) for h in result] == [
+        assert [(h.source["year"], h.source["rating"]) for h in result] == [
             (2025, 4.9),
             (2025, 4.3),
             (2022, 4.5),
@@ -436,7 +437,7 @@ class TestSortHits:
             [SortKey(name="year", descending=False), SortKey(name="rating")],
             limit=10,
         )
-        assert [(h["year"], h["rating"]) for h in result] == [
+        assert [(h.source["year"], h.source["rating"]) for h in result] == [
             (2020, 4.5),
             (2022, 4.5),
             (2025, 4.9),
@@ -459,13 +460,13 @@ class TestSortHits:
 
     def test_missing_sort_field_defaults_to_zero(self):
         hits = [
-            {"title": "A", "year": 2025, "_score": 1.0},
-            {"title": "B", "_score": 2.0},  # no "year"
+            Hit(source={"title": "A", "year": 2025}, score=1.0),
+            Hit(source={"title": "B"}, score=2.0),  # no "year"
         ]
         result = _sort_hits(hits, [SortKey(name="year")], limit=10)
         # missing year → 0, so it sorts last in DESC
-        assert result[0]["title"] == "A"
-        assert result[1]["title"] == "B"
+        assert result[0].source["title"] == "A"
+        assert result[1].source["title"] == "B"
 
 
 class TestSearchIndexSorted:
@@ -496,7 +497,7 @@ class TestSearchIndexSorted:
             index, fields, "python",
             sort_keys=[SortKey(name="year")],
         )
-        years = [h["year"] for h in hits]
+        years = [h.source["year"] for h in hits]
         assert years == sorted(years, reverse=True)
 
     def test_sort_by_year_asc(self, sorted_index):
@@ -505,7 +506,7 @@ class TestSearchIndexSorted:
             index, fields, "python",
             sort_keys=[SortKey(name="year", descending=False)],
         )
-        years = [h["year"] for h in hits]
+        years = [h.source["year"] for h in hits]
         assert years == sorted(years)
 
     def test_multi_field_sort(self, sorted_index):
@@ -515,7 +516,7 @@ class TestSearchIndexSorted:
             index, fields, "python",
             sort_keys=[SortKey(name="year"), SortKey(name="rating")],
         )
-        pairs = [(h["year"], h["rating"]) for h in hits]
+        pairs = [(h.source["year"], h.source["rating"]) for h in hits]
         # 2025 group first (desc), within 2025: 4.9 > 4.3
         assert pairs[0] == (2025, 4.9)
         assert pairs[1] == (2025, 4.3)
@@ -543,7 +544,7 @@ class TestSearchResponse:
 
     def test_creation(self):
         r = SearchResponse(
-            hits=[{"title": "A", "_score": 1.0}],
+            hits=[Hit(source={"title": "A"}, score=1.0)],
             size=1,
             took_ms=5,
             fresh=True,
@@ -672,7 +673,7 @@ class TestDataSet:
         )
         r = ds.search("python")
         if r.size >= 2:
-            years = [h["year"] for h in r.hits]
+            years = [h.source["year"] for h in r.hits]
             assert years == sorted(years, reverse=True)
 
     # -- tracker integration --------------------------------------------------

@@ -24,6 +24,7 @@ _EXPECTED_NAMES = [
     # dataset
     "DataSet",
     "SortKey",
+    "Hit",
     "SearchResponse",
     # tracker
     "Tracker",

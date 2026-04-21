@@ -21,6 +21,7 @@ from .fields import T_Field
 from .fields import fields_schema_hash
 from .dataset import DataSet
 from .dataset import SortKey
+from .dataset import Hit
 from .dataset import SearchResponse
 from .tracker import Tracker
 from .cache import DataSetCache

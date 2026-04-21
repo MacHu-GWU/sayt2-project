@@ -133,6 +133,21 @@ SortKey
 :attr:`~sayt2.dataset.DataSet.sort` for multi-field sorting.
 
 
+Hit
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. literalinclude:: ../../../../sayt2/dataset.py
+   :language: python
+   :pyobject: Hit
+
+:class:`~sayt2.dataset.Hit` is a **frozen dataclass** representing a single
+search result.  Key fields:
+
+- ``source`` — dict of stored document fields (modelled after Elasticsearch's
+  ``_source``).
+- ``score`` — BM25 relevance score.
+
+
 SearchResponse
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -143,7 +158,7 @@ SearchResponse
 :class:`~sayt2.dataset.SearchResponse` is a **frozen dataclass** — immutable
 after creation.  Key fields:
 
-- ``hits`` — list of hit dicts, each containing stored fields plus ``_score``.
+- ``hits`` — list of :class:`~sayt2.dataset.Hit` objects.
 - ``size`` — number of hits returned.
 - ``took_ms`` — wall-clock time for the full search flow.
 - ``fresh`` — ``True`` if this search triggered a data refresh.

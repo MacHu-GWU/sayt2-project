@@ -1,0 +1,64 @@
+{
+    "records": [
+        {
+            "id": "1",
+            "name": "Alice Johnson",
+            "title": "Senior Data Scientist",
+            "bio": "Alice specializes in machine learning and natural language processing. She has published several papers on transformer architectures."
+        },
+        {
+            "id": "2",
+            "name": "Bob Martinez",
+            "title": "Backend Engineer",
+            "bio": "Bob builds scalable microservices with Python and Go. He is passionate about distributed systems and database optimization."
+        },
+        {
+            "id": "3",
+            "name": "Charlie Wang",
+            "title": "Frontend Developer",
+            "bio": "Charlie creates beautiful user interfaces with React and TypeScript. He advocates for accessibility and performance."
+        },
+        {
+            "id": "4",
+            "name": "Diana Patel",
+            "title": "DevOps Engineer",
+            "bio": "Diana manages cloud infrastructure on AWS and Kubernetes. She automates everything from CI pipelines to monitoring dashboards."
+        },
+        {
+            "id": "5",
+            "name": "Edward Kim",
+            "title": "Machine Learning Engineer",
+            "bio": "Edward trains and deploys deep learning models for computer vision. He works extensively with PyTorch and TensorFlow."
+        },
+        {
+            "id": "6",
+            "name": "Fiona Chen",
+            "title": "Full Stack Developer",
+            "bio": "Fiona builds end-to-end web applications using Django and Vue.js. She enjoys prototyping new product features rapidly."
+        },
+        {
+            "id": "7",
+            "name": "George Brown",
+            "title": "Security Analyst",
+            "bio": "George conducts penetration testing and vulnerability assessments. He holds multiple certifications including CISSP and CEH."
+        },
+        {
+            "id": "8",
+            "name": "Hannah Lee",
+            "title": "Data Engineer",
+            "bio": "Hannah designs ETL pipelines and data warehouses using Apache Spark and Airflow. She ensures data quality across the organization."
+        },
+        {
+            "id": "9",
+            "name": "Ivan Novak",
+            "title": "Platform Engineer",
+            "bio": "Ivan builds internal developer platforms and tooling. He focuses on improving developer experience and reducing deployment friction."
+        },
+        {
+            "id": "10",
+            "name": "Julia Santos",
+            "title": "Technical Writer",
+            "bio": "Julia writes API documentation and developer guides. She bridges the gap between engineering teams and external developers."
+        }
+    ]
+}

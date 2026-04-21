@@ -14,9 +14,10 @@ Responsibilities:
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -54,14 +55,28 @@ class SortKey(BaseModel):
 
 
 @dataclass(frozen=True)
+class Hit:
+    """A single search hit with source document and relevance score."""
+
+    source: dict[str, Any]
+    score: float
+
+
+@dataclass(frozen=True)
 class SearchResponse:
     """Immutable search result returned by :meth:`DataSet.search`."""
 
-    hits: list[dict[str, Any]]
+    hits: list[Hit]
     size: int
     took_ms: int
     fresh: bool
     cache: bool
+
+    def to_json(self) -> str:
+        return json.dumps(asdict(self), indent=2, ensure_ascii=False)
+
+    def jprint(self):
+        print(self.to_json())
 
 
 def _ngram_tokenizer_name(f: NgramField) -> str:
@@ -200,17 +215,17 @@ def _extract_hits(
     searcher: tantivy.Searcher,
     results: tantivy.SearchResult,
     stored_names: list[str],
-) -> list[dict[str, Any]]:
-    """Materialise search results into a list of hit dicts."""
-    hits: list[dict[str, Any]] = []
+) -> list[Hit]:
+    """Materialise search results into a list of :class:`Hit` objects."""
+    hits: list[Hit] = []
     for score, addr in results.hits:
         doc = searcher.doc(addr)
-        hit: dict[str, Any] = {"_score": score}
+        source: dict[str, Any] = {}
         for name in stored_names:
             values = doc[name]
             if values:
-                hit[name] = values[0] if len(values) == 1 else values
-        hits.append(hit)
+                source[name] = values[0] if len(values) == 1 else values
+        hits.append(Hit(source=source, score=score))
     return hits
 
 
@@ -219,7 +234,7 @@ def search_index(
     fields: list[BaseField],
     query_str: str,
     limit: int = 20,
-) -> list[dict[str, Any]]:
+) -> list[Hit]:
     """
     Parse *query_str* against the searchable fields in *fields*, execute the
     search, and return up to *limit* hits as a list of dicts.
@@ -250,7 +265,7 @@ def fuzzy_search_index(
     distance: int = 1,
     transposition_cost_one: bool = True,
     prefix: bool = False,
-) -> list[dict[str, Any]]:
+) -> list[Hit]:
     """
     Fuzzy search using ``Query.fuzzy_term_query`` on each TextField.
 
@@ -293,10 +308,10 @@ def fuzzy_search_index(
 
 
 def _sort_hits(
-    hits: list[dict[str, Any]],
+    hits: list[Hit],
     sort_keys: list[SortKey],
     limit: int,
-) -> list[dict[str, Any]]:
+) -> list[Hit]:
     """
     Sort *hits* by multiple fields (lexicographic) and return the top *limit*.
 
@@ -310,7 +325,7 @@ def _sort_hits(
     result = list(hits)
     for sk in reversed(sort_keys):
         result.sort(
-            key=lambda h, _name=sk.name: h.get(_name, 0),
+            key=lambda h, _name=sk.name: h.source.get(_name, 0),
             reverse=sk.descending,
         )
     return result[:limit]
@@ -323,7 +338,7 @@ def search_index_sorted(
     sort_keys: list[SortKey],
     limit: int = 20,
     over_fetch_factor: int = 10,
-) -> list[dict[str, Any]]:
+) -> list[Hit]:
     """
     Search then sort by multiple fields.
 

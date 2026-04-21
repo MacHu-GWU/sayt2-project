@@ -80,7 +80,7 @@ class TestFullLifecycle:
         assert r.size >= 1
         assert r.fresh is False  # data already fresh from build_index
         assert r.cache is False
-        assert all("_score" in h for h in r.hits)
+        assert all(isinstance(h.score, float) for h in r.hits)
 
     def test_downloader_lifecycle(self, tmp_path):
         ds = DataSet(
@@ -119,8 +119,8 @@ class TestSearchAsYouType:
             assert r.size >= 1, f"No results for '{prefix}'"
             # all results should contain "Python" in title
             for h in r.hits:
-                assert "python" in h["title"].lower() or "python" in h.get("author", "").lower(), (
-                    f"'{prefix}' matched unexpected doc: {h['title']}"
+                assert "python" in h.source["title"].lower() or "python" in h.source.get("author", "").lower(), (
+                    f"'{prefix}' matched unexpected doc: {h.source['title']}"
                 )
 
 
@@ -193,7 +193,7 @@ class TestSortedSearch:
         )
         r = ds.search("python")
         if r.size >= 2:
-            years = [h["year"] for h in r.hits]
+            years = [h.source["year"] for h in r.hits]
             assert years == sorted(years, reverse=True)
 
     def test_sorted_by_rating_then_year(self, tmp_path):
@@ -207,7 +207,7 @@ class TestSortedSearch:
         r = ds.search("python")
         if r.size >= 2:
             # ratings should be descending
-            ratings = [h["rating"] for h in r.hits]
+            ratings = [h.source["rating"] for h in r.hits]
             assert ratings == sorted(ratings, reverse=True), (
                 f"Expected descending ratings, got {ratings}"
             )

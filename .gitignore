@@ -3,6 +3,7 @@ sayt2.egg-info/
 docs/source/**/index.md
 .claude/claude-code-message*
 tmp/
+.index/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
