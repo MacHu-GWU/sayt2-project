@@ -152,39 +152,11 @@ if dir_index.exists():
 def downloader() -> list[dict]:
     """Return the raw records. In real use this could hit a DB or API."""
     return records
-
-ds = DataSet(
-    dir_root=dir_index,
-    name="people",
-    fields=fields,
-    downloader=downloader,
-    cache_expire=None,
-)
 ```
 
-### Step 4: Search
+**Option A — context manager (recommended):**
 
-```python
-# Ngram search — substring matching (search-as-you-type)
-result = ds.search("ali")
-# Returns Alice Johnson
-
-# Full-text search — BM25 word-level
-result = ds.search("machine learning")
-# Returns Edward Kim, Alice Johnson
-
-# Check cache behavior
-r1 = ds.search("kubernetes")     # cache miss
-r2 = ds.search("kubernetes")     # cache hit (r2.cache == True)
-
-# Force rebuild the index
-r = ds.search("kubernetes", refresh=True)  # r.fresh == True
-
-# Always close when done
-ds.close()
-```
-
-### Using context manager (recommended)
+`DataSet` supports `with` statement, which automatically closes the index and cache when the block exits.
 
 ```python
 with DataSet(
@@ -192,10 +164,46 @@ with DataSet(
     name="people",
     fields=fields,
     downloader=downloader,
+    cache_expire=None,
 ) as ds:
+    # Ngram search — substring matching (search-as-you-type)
     result = ds.search("ali")
+    # Returns Alice Johnson
     for hit in result.hits:
         print(f"{hit.source['name']} (score: {hit.score:.2f})")
+
+    # Full-text search — BM25 word-level
+    result = ds.search("machine learning")
+    # Returns Edward Kim, Alice Johnson
+
+    # Check cache behavior
+    r1 = ds.search("kubernetes")     # cache miss
+    r2 = ds.search("kubernetes")     # cache hit (r2.cache == True)
+
+    # Force rebuild the index
+    r = ds.search("kubernetes", refresh=True)  # r.fresh == True
+# ds is automatically closed here
+```
+
+**Option B — manual close:**
+
+If you cannot use a `with` block, call `ds.close()` explicitly when done.
+
+```python
+ds = DataSet(
+    dir_root=dir_index,
+    name="people",
+    fields=fields,
+    downloader=downloader,
+    cache_expire=None,
+)
+
+result = ds.search("ali")
+for hit in result.hits:
+    print(f"{hit.source['name']} (score: {hit.score:.2f})")
+
+# Always close when done
+ds.close()
 ```
 
 ## Example 2 — Book Catalog (Sort + Range Queries)
