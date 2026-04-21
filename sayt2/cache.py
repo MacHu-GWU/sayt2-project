@@ -27,7 +27,7 @@ if T.TYPE_CHECKING:
 
 class DataSetCache:
     """
-    Manages a two-layer cache backed by :pypi:`diskcache`.
+    Manages a two-layer cache backed by `diskcache <https://pypi.org/project/diskcache/>`__.
 
     :param dir_cache: Directory for the ``diskcache.Cache`` files.
     :param dataset_name: Logical name of the dataset (e.g. ``"books"``).

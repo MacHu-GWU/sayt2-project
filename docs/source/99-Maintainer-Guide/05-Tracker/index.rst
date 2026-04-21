@@ -43,8 +43,8 @@ The UPSERT — atomic lock acquisition
 ------------------------------------------------------------------------------
 
 .. literalinclude:: ../../../../sayt2/tracker.py
-   :language: python
-   :lines: 29-45
+   :language: sql
+   :lines: 41-46
 
 This single SQL statement handles three cases:
 
