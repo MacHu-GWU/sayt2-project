@@ -148,14 +148,14 @@ search result.  Key fields:
 - ``score`` — BM25 relevance score.
 
 
-SearchResponse
+SearchResult
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. literalinclude:: ../../../../sayt2/dataset.py
    :language: python
-   :pyobject: SearchResponse
+   :pyobject: SearchResult
 
-:class:`~sayt2.dataset.SearchResponse` is a **frozen dataclass** — immutable
+:class:`~sayt2.dataset.SearchResult` is a **frozen dataclass** — immutable
 after creation.  Key fields:
 
 - ``hits`` — list of :class:`~sayt2.dataset.Hit` objects.

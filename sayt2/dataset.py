@@ -63,7 +63,7 @@ class Hit:
 
 
 @dataclass(frozen=True)
-class SearchResponse:
+class SearchResult:
     """Immutable search result returned by :meth:`DataSet.search`."""
 
     hits: list[Hit]
@@ -488,7 +488,7 @@ class DataSet(BaseModel):
         query: str,
         limit: int = 20,
         refresh: bool = False,
-    ) -> SearchResponse:
+    ) -> SearchResult:
         """
         Full search flow:
 
@@ -531,7 +531,7 @@ class DataSet(BaseModel):
             hits = search_index(index, self.fields, query, limit=limit)
 
         took_ms = int((time.monotonic() - t0) * 1000)
-        response = SearchResponse(
+        response = SearchResult(
             hits=hits,
             size=len(hits),
             took_ms=took_ms,
@@ -540,7 +540,7 @@ class DataSet(BaseModel):
         )
 
         # cache with cache=True so subsequent reads get the cached flag
-        cached_response = SearchResponse(
+        cached_response = SearchResult(
             hits=hits,
             size=len(hits),
             took_ms=took_ms,

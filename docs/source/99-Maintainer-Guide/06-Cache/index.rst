@@ -55,7 +55,7 @@ Key methods:
    a successful index build and starts the expiry countdown.
 
 :meth:`~sayt2.cache.DataSetCache.get_query_result` / :meth:`~sayt2.cache.DataSetCache.set_query_result`
-   L2 interface.  Results are always :class:`~sayt2.dataset.SearchResponse`
+   L2 interface.  Results are always :class:`~sayt2.dataset.SearchResult`
    objects, so a ``None`` return unambiguously means cache miss.
 
 :meth:`~sayt2.cache.DataSetCache.evict_all`

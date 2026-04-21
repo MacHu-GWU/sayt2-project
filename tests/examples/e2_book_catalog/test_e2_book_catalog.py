@@ -28,7 +28,7 @@ from sayt2.api import (
     KeywordField,
     NgramField,
     NumericField,
-    SearchResponse,
+    SearchResult,
     SortKey,
     TextField,
 )

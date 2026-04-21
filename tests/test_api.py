@@ -25,7 +25,7 @@ _EXPECTED_NAMES = [
     "DataSet",
     "SortKey",
     "Hit",
-    "SearchResponse",
+    "SearchResult",
     # tracker
     "Tracker",
     # cache

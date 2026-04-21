@@ -26,7 +26,7 @@ from sayt2.dataset import (
     _sort_hits,
     SortKey,
     Hit,
-    SearchResponse,
+    SearchResult,
     DataSet,
 )
 
@@ -619,11 +619,11 @@ class TestSearchIndexSorted:
         assert sk2.descending is True  # default
 
 
-class TestSearchResponse:
-    """Step 5.6: SearchResponse immutable model."""
+class TestSearchResult:
+    """Step 5.6: SearchResult immutable model."""
 
     def test_creation(self):
-        r = SearchResponse(
+        r = SearchResult(
             hits=[Hit(source={"title": "A"}, score=1.0)],
             size=1,
             took_ms=5,
@@ -635,7 +635,7 @@ class TestSearchResponse:
         assert r.cache is False
 
     def test_frozen(self):
-        r = SearchResponse(hits=[], size=0, took_ms=0, fresh=False, cache=False)
+        r = SearchResult(hits=[], size=0, took_ms=0, fresh=False, cache=False)
         with pytest.raises(Exception):
             r.size = 99  # type: ignore[misc]
 
@@ -693,7 +693,7 @@ class TestDataSet:
 
         with self._make_ds(tmp_path, downloader=downloader) as ds:
             result = ds.search("python")
-            assert isinstance(result, SearchResponse)
+            assert isinstance(result, SearchResult)
             assert result.fresh is True
             assert result.cache is False
             assert result.size >= 1

@@ -27,7 +27,7 @@ from sayt2.api import (
     KeywordField,
     StoredField,
     Hit,
-    SearchResponse,
+    SearchResult,
 )
 
 # ---------------------------------------------------------------------------
@@ -80,7 +80,7 @@ def test():
         # ------------------------------------------------------------------
         r = ds.search("ali")
         # r.jprint()  # for debug only
-        assert isinstance(r, SearchResponse)
+        assert isinstance(r, SearchResult)
         assert r.size >= 1
         assert r.fresh is True  # first search triggers build_index
         assert r.cache is False

@@ -22,6 +22,6 @@ from .fields import fields_schema_hash
 from .dataset import DataSet
 from .dataset import SortKey
 from .dataset import Hit
-from .dataset import SearchResponse
+from .dataset import SearchResult
 from .tracker import Tracker
 from .cache import DataSetCache

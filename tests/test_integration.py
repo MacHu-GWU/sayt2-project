@@ -18,7 +18,7 @@ from sayt2.api import (
     KeywordField,
     NgramField,
     NumericField,
-    SearchResponse,
+    SearchResult,
     SortKey,
     TextField,
     Tracker,
@@ -76,7 +76,7 @@ class TestFullLifecycle:
         ) as ds:
             ds.build_index(data=BOOKS)
             r = ds.search("python")
-            assert isinstance(r, SearchResponse)
+            assert isinstance(r, SearchResult)
             assert r.size >= 1
             assert r.fresh is False  # data already fresh from build_index
             assert r.cache is False

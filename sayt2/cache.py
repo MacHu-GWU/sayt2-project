@@ -6,7 +6,7 @@ Two-layer disk cache for sayt2 datasets.
 Layer 1 — **data freshness**: tracks whether the index is up-to-date.
     Expires after ``expire`` seconds, triggering a downloader + rebuild.
 
-Layer 2 — **query results**: caches ``SearchResponse`` objects keyed by
+Layer 2 — **query results**: caches ``SearchResult`` objects keyed by
     ``(query, limit)``.  Invalidated whenever L1 expires and a rebuild
     happens.
 
@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 import diskcache
 
 if TYPE_CHECKING:
-    from .dataset import SearchResponse
+    from .dataset import SearchResult
 
 
 class DataSetCache:
@@ -82,16 +82,16 @@ class DataSetCache:
 
     # -- Layer 2: query result cache ------------------------------------------
 
-    def get_query_result(self, query: str, limit: int) -> "SearchResponse | None":
+    def get_query_result(self, query: str, limit: int) -> "SearchResult | None":
         """
         Return the cached result for *(query, limit)*, or ``None`` on miss.
 
-        Query results are always ``SearchResponse`` objects (never ``None``),
+        Query results are always ``SearchResult`` objects (never ``None``),
         so a ``None`` return unambiguously means cache miss.
         """
         return self._cache.get(self._query_key(query, limit))
 
-    def set_query_result(self, query: str, limit: int, result: SearchResponse) -> None:
+    def set_query_result(self, query: str, limit: int, result: SearchResult) -> None:
         """
         Cache a query result.  L2 entries never expire on their own — they
         are bulk-evicted when L1 triggers a rebuild via :meth:`evict_all`.

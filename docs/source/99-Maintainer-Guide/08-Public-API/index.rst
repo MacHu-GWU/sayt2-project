@@ -70,7 +70,7 @@ The table below groups every exported name by its source module:
      - :class:`~sayt2.dataset.Hit`
      - Class
    * - :mod:`~sayt2.dataset`
-     - :class:`~sayt2.dataset.SearchResponse`
+     - :class:`~sayt2.dataset.SearchResult`
      - Class
    * - :mod:`~sayt2.dataset`
      - :class:`~sayt2.tracker.Tracker`
