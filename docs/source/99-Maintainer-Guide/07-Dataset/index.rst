@@ -192,6 +192,42 @@ All state (index files, cache, tracker DB) lives under ``dir_root``:
        └── cache/                    ← diskcache files
 
 
+Resource lifecycle
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+:class:`~sayt2.dataset.DataSet` lazily opens a
+:class:`~sayt2.cache.DataSetCache` (backed by ``diskcache.Cache``, which holds
+a ``sqlite3`` connection).  The connection is **reused** across calls to
+:meth:`~sayt2.dataset.DataSet.search` and
+:meth:`~sayt2.dataset.DataSet.build_index` — it is **not** closed
+automatically after each call.
+
+Three ways to manage the lifecycle:
+
+.. code-block:: python
+
+   # 1. Context manager (recommended)
+   with DataSet(dir_root=..., name="books", fields=..., downloader=dl) as ds:
+       r1 = ds.search("python")
+       r2 = ds.search("rust")
+   # cache closed automatically on __exit__
+
+   # 2. Explicit close
+   ds = DataSet(...)
+   ds.search("python")
+   ds.close()          # safe to call multiple times
+
+   # 3. One-off script (GC will reclaim eventually)
+   ds = DataSet(...)
+   ds.search("python")
+
+After :meth:`~sayt2.dataset.DataSet.close`, the ``DataSet`` can still be used —
+the next call lazily re-opens the cache.
+
+:class:`~sayt2.tracker.Tracker` connections are **not** held open; each
+``lock_it`` / ``unlock_it`` call opens and closes its own ``sqlite3``
+connection, so the tracker needs no explicit lifecycle management.
+
+
 build_index
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 :meth:`~sayt2.dataset.DataSet.build_index` acquires a tracker lock, evicts all

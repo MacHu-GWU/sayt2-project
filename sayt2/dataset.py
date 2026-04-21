@@ -31,6 +31,7 @@ from tantivy import SchemaBuilder
 from tantivy import TextAnalyzerBuilder
 from tantivy import Tokenizer
 
+from .constants import NumericKindEnum
 from .cache import DataSetCache
 from .fields import T_Field
 from .fields import BaseField
@@ -126,9 +127,9 @@ def build_schema(
 
         elif isinstance(f, NumericField):
             add_fn = {
-                "i64": sb.add_integer_field,
-                "u64": sb.add_unsigned_field,
-                "f64": sb.add_float_field,
+                NumericKindEnum.I64.value: sb.add_integer_field,
+                NumericKindEnum.U64.value: sb.add_unsigned_field,
+                NumericKindEnum.F64.value: sb.add_float_field,
             }[f.kind]
             add_fn(f.name, stored=f.stored, indexed=f.indexed, fast=f.fast)
 
