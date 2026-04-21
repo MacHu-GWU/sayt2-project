@@ -12,18 +12,16 @@ import time
 
 import pytest
 
-from sayt2.api import (
-    DataSet,
-    DataSetCache,
-    KeywordField,
-    NgramField,
-    NumericField,
-    SearchResult,
-    SortKey,
-    TextField,
-    Tracker,
-    TrackerIsLockedError,
-)
+from sayt2.api import DataSet
+from sayt2.api import DataSetCache
+from sayt2.api import KeywordField
+from sayt2.api import NgramField
+from sayt2.api import NumericField
+from sayt2.api import SearchResult
+from sayt2.api import SortKey
+from sayt2.api import TextField
+from sayt2.api import Tracker
+from sayt2.api import TrackerIsLockedError
 
 
 # -- sample data --------------------------------------------------------------

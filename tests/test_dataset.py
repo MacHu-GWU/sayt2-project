@@ -5,30 +5,26 @@ from pathlib import Path
 
 import tantivy
 
-from sayt2.fields import (
-    StoredField,
-    KeywordField,
-    TextField,
-    NgramField,
-    NumericField,
-    DatetimeField,
-    BooleanField,
-)
+from sayt2.fields import StoredField
+from sayt2.fields import KeywordField
+from sayt2.fields import TextField
+from sayt2.fields import NgramField
+from sayt2.fields import NumericField
+from sayt2.fields import DatetimeField
+from sayt2.fields import BooleanField
 from sayt2.exc import TrackerIsLockedError
-from sayt2.dataset import (
-    build_schema,
-    open_index,
-    write_documents,
-    search_index,
-    fuzzy_search_index,
-    search_index_sorted,
-    _collect_search_config,
-    _sort_hits,
-    SortKey,
-    Hit,
-    SearchResult,
-    DataSet,
-)
+from sayt2.dataset import build_schema
+from sayt2.dataset import open_index
+from sayt2.dataset import write_documents
+from sayt2.dataset import search_index
+from sayt2.dataset import fuzzy_search_index
+from sayt2.dataset import search_index_sorted
+from sayt2.dataset import _collect_search_config
+from sayt2.dataset import _sort_hits
+from sayt2.dataset import SortKey
+from sayt2.dataset import Hit
+from sayt2.dataset import SearchResult
+from sayt2.dataset import DataSet
 
 
 SAMPLE_FIELDS = [

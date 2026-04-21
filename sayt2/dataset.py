@@ -16,34 +16,32 @@ from __future__ import annotations
 
 import json
 import time
+import typing as T
 from collections.abc import Callable
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
+from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Iterable
 
 import tantivy
-from pydantic import BaseModel, PrivateAttr
-from tantivy import (
-    Filter,
-    Index,
-    SchemaBuilder,
-    TextAnalyzerBuilder,
-    Tokenizer,
-)
+from pydantic import BaseModel
+from pydantic import PrivateAttr
+from tantivy import Filter
+from tantivy import Index
+from tantivy import SchemaBuilder
+from tantivy import TextAnalyzerBuilder
+from tantivy import Tokenizer
 
 from .cache import DataSetCache
-from .fields import (
-    T_Field,
-    BaseField,
-    StoredField,
-    KeywordField,
-    TextField,
-    NgramField,
-    NumericField,
-    DatetimeField,
-    BooleanField,
-    fields_schema_hash,
-)
+from .fields import T_Field
+from .fields import BaseField
+from .fields import StoredField
+from .fields import KeywordField
+from .fields import TextField
+from .fields import NgramField
+from .fields import NumericField
+from .fields import DatetimeField
+from .fields import BooleanField
+from .fields import fields_schema_hash
 from .tracker import Tracker
 
 
@@ -58,7 +56,7 @@ class SortKey(BaseModel):
 class Hit:
     """A single search hit with source document and relevance score."""
 
-    source: dict[str, Any]
+    source: dict[str, T.Any]
     score: float
 
 
@@ -165,7 +163,7 @@ def open_index(
 
 def write_documents(
     index: Index,
-    data: Iterable[dict[str, Any]],
+    data: T.Iterable[dict[str, T.Any]],
     memory_budget_bytes: int = 128_000_000,
     num_threads: int | None = None,
 ) -> int:
@@ -178,7 +176,7 @@ def write_documents(
     :param num_threads: Number of indexing threads (``None`` = tantivy default).
     :returns: Number of documents written.
     """
-    writer_kwargs: dict[str, Any] = {"heap_size": memory_budget_bytes}
+    writer_kwargs: dict[str, T.Any] = {"heap_size": memory_budget_bytes}
     if num_threads is not None:
         writer_kwargs["num_threads"] = num_threads
 
@@ -222,7 +220,7 @@ def _extract_hits(
     hits: list[Hit] = []
     for score, addr in results.hits:
         doc = searcher.doc(addr)
-        source: dict[str, Any] = {}
+        source: dict[str, T.Any] = {}
         for name in stored_names:
             values = doc[name]
             if values:
@@ -250,7 +248,7 @@ def search_index(
     if not searchable:
         return []
 
-    kwargs: dict[str, Any] = {}
+    kwargs: dict[str, T.Any] = {}
     if boosts:
         kwargs["field_boosts"] = boosts
     query = index.parse_query(query_str, searchable, **kwargs)
@@ -384,7 +382,7 @@ class DataSet(BaseModel):
     name: str
     fields: list[T_Field]  # type: ignore[type-arg]
 
-    downloader: Callable[[], Iterable[dict[str, Any]]] | None = None
+    downloader: Callable[[], T.Iterable[dict[str, T.Any]]] | None = None
     cache_expire: int | None = None
     sort: list[SortKey] | None = None
 
@@ -454,7 +452,7 @@ class DataSet(BaseModel):
 
     def build_index(
         self,
-        data: Iterable[dict[str, Any]] | None = None,
+        data: T.Iterable[dict[str, T.Any]] | None = None,
     ) -> int:
         """
         Build (or rebuild) the index with tracker lock protection.

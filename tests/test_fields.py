@@ -1,20 +1,19 @@
 # -*- coding: utf-8 -*-
 
 import pytest
-from pydantic import TypeAdapter, ValidationError
+from pydantic import TypeAdapter
+from pydantic import ValidationError
 
-from sayt2.fields import (
-    BaseField,
-    StoredField,
-    KeywordField,
-    TextField,
-    NgramField,
-    NumericField,
-    DatetimeField,
-    BooleanField,
-    T_Field,
-    fields_schema_hash,
-)
+from sayt2.fields import BaseField
+from sayt2.fields import StoredField
+from sayt2.fields import KeywordField
+from sayt2.fields import TextField
+from sayt2.fields import NgramField
+from sayt2.fields import NumericField
+from sayt2.fields import DatetimeField
+from sayt2.fields import BooleanField
+from sayt2.fields import T_Field
+from sayt2.fields import fields_schema_hash
 
 # TypeAdapter for polymorphic deserialization
 _adapter = TypeAdapter(T_Field)

@@ -15,11 +15,15 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Annotated, Literal, Union
+import typing as T
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel
+from pydantic import Field
+from pydantic import model_validator
 
-from .constants import FieldTypeEnum, NumericKindEnum, TokenizerEnum
+from .constants import FieldTypeEnum
+from .constants import NumericKindEnum
+from .constants import TokenizerEnum
 
 # --- base -------------------------------------------------------------------
 
@@ -28,7 +32,7 @@ class BaseField(BaseModel):
     """
     Common base for all field types.
 
-    Every subclass must override ``type`` with a ``Literal["..."]`` so that
+    Every subclass must override ``type`` with a ``T.Literal["..."]`` so that
     pydantic's discriminated union can reconstruct the correct class from a
     plain dict.
     """
@@ -44,7 +48,7 @@ class BaseField(BaseModel):
 class StoredField(BaseField):
     """Store-only field.  Not indexed, not searchable, not sortable."""
 
-    type: Literal["stored"] = FieldTypeEnum.STORED.value
+    type: T.Literal["stored"] = FieldTypeEnum.STORED.value
 
 
 class KeywordField(BaseField):
@@ -53,7 +57,7 @@ class KeywordField(BaseField):
     hood — the entire field value is treated as one token.
     """
 
-    type: Literal["keyword"] = FieldTypeEnum.KEYWORD.value
+    type: T.Literal["keyword"] = FieldTypeEnum.KEYWORD.value
     boost: float = Field(default=1.0, gt=0)
 
 
@@ -63,8 +67,8 @@ class TextField(BaseField):
     boundary) or ``en_stem`` (English stemming) tokenizer.
     """
 
-    type: Literal["text"] = FieldTypeEnum.TEXT.value
-    tokenizer: Literal["default", "en_stem"] = TokenizerEnum.DEFAULT.value
+    type: T.Literal["text"] = FieldTypeEnum.TEXT.value
+    tokenizer: T.Literal["default", "en_stem"] = TokenizerEnum.DEFAULT.value
     boost: float = Field(default=1.0, gt=0)
 
 
@@ -74,7 +78,7 @@ class NgramField(BaseField):
     substring of length ``[min_gram, max_gram]`` is a valid query token.
     """
 
-    type: Literal["ngram"] = FieldTypeEnum.NGRAM.value
+    type: T.Literal["ngram"] = FieldTypeEnum.NGRAM.value
     min_gram: int = Field(default=2, ge=1)
     max_gram: int = Field(default=6, ge=1)
     prefix_only: bool = False
@@ -99,8 +103,8 @@ class NumericField(BaseField):
     is the typical use case for rating/year columns.
     """
 
-    type: Literal["numeric"] = FieldTypeEnum.NUMERIC.value
-    kind: Literal["i64", "u64", "f64"] = NumericKindEnum.I64.value
+    type: T.Literal["numeric"] = FieldTypeEnum.NUMERIC.value
+    kind: T.Literal["i64", "u64", "f64"] = NumericKindEnum.I64.value
     indexed: bool = False
     fast: bool = True
 
@@ -108,7 +112,7 @@ class NumericField(BaseField):
 class DatetimeField(BaseField):
     """Datetime field backed by tantivy's date type."""
 
-    type: Literal["datetime"] = FieldTypeEnum.DATETIME.value
+    type: T.Literal["datetime"] = FieldTypeEnum.DATETIME.value
     indexed: bool = True
     fast: bool = True
 
@@ -116,14 +120,14 @@ class DatetimeField(BaseField):
 class BooleanField(BaseField):
     """Boolean field."""
 
-    type: Literal["boolean"] = FieldTypeEnum.BOOLEAN.value
+    type: T.Literal["boolean"] = FieldTypeEnum.BOOLEAN.value
     indexed: bool = True
 
 
 # --- union & helpers ---------------------------------------------------------
 
-T_Field = Annotated[
-    Union[
+T_Field = T.Annotated[
+    T.Union[
         StoredField,
         KeywordField,
         TextField,

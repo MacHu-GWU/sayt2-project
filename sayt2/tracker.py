@@ -12,7 +12,9 @@ The ``locks`` table is created lazily on first ``OperationalError``.
 import uuid
 import sqlite3
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
+from datetime import timezone
+from datetime import timedelta
 from contextlib import contextmanager
 
 from .exc import TrackerIsLockedError

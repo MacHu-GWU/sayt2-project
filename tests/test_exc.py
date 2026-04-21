@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 
-from sayt2.exc import (
-    MalformedFieldSettingError,
-    MalformedDatasetSettingError,
-    TrackerIsLockedError,
-)
+from sayt2.exc import MalformedFieldSettingError
+from sayt2.exc import MalformedDatasetSettingError
+from sayt2.exc import TrackerIsLockedError
 
 
 class TestExceptions:

@@ -16,12 +16,12 @@ key prefixes and linked by a shared tag for bulk eviction.
 
 from __future__ import annotations
 
+import typing as T
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import diskcache
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     from .dataset import SearchResult
 
 

@@ -20,15 +20,13 @@ import json
 import shutil
 from pathlib import Path
 
-from sayt2.api import (
-    DataSet,
-    NgramField,
-    TextField,
-    KeywordField,
-    StoredField,
-    Hit,
-    SearchResult,
-)
+from sayt2.api import DataSet
+from sayt2.api import NgramField
+from sayt2.api import TextField
+from sayt2.api import KeywordField
+from sayt2.api import StoredField
+from sayt2.api import Hit
+from sayt2.api import SearchResult
 
 # ---------------------------------------------------------------------------
 # Paths
