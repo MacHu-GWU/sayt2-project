@@ -15,6 +15,7 @@ Responsibilities:
 from __future__ import annotations
 
 import json
+import shutil
 import time
 import typing as T
 from collections.abc import Callable
@@ -472,6 +473,7 @@ class DataSet(BaseModel):
         cache = self._cache
         with tracker.lock(self.name, expire=self.lock_expire):
             cache.evict_all()
+            shutil.rmtree(self._dir_index, ignore_errors=True)
             index = self._open_index()
             count = write_documents(
                 index,
