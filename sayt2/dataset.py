@@ -16,11 +16,12 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
 import tantivy
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 from tantivy import (
     Filter,
     Index,
@@ -52,10 +53,9 @@ class SortKey(BaseModel):
     descending: bool = True
 
 
-class SearchResponse(BaseModel):
+@dataclass(frozen=True)
+class SearchResponse:
     """Immutable search result returned by :meth:`DataSet.search`."""
-
-    model_config = ConfigDict(frozen=True)
 
     hits: list[dict[str, Any]]
     size: int
@@ -362,8 +362,6 @@ class DataSet(BaseModel):
     :param num_threads: Number of indexing threads (``None`` = tantivy default).
     :param lock_expire: Seconds before the tracker lock expires.
     """
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     dir_root: Path
     name: str
