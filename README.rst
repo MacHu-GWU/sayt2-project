@@ -45,12 +45,21 @@
     :target: https://pypi.org/pypi/sayt2#files
 
 
-Welcome to ``sayt2`` Documentation
+Welcome to ``sayt2`` (Search As You Type) Documentation
 ==============================================================================
 .. image:: https://sayt2.readthedocs.io/en/latest/_static/sayt2-logo.png
     :target: https://sayt2.readthedocs.io/en/latest/
 
-Documentation for ``sayt2``.
+``sayt2`` is a Python library that provides a Google-like search-as-you-type experience on your own dataset. It lets you quickly build a full-text search index from a list of dictionaries and start searching immediately. Powered by `tantivy <https://github.com/quickwit-oss/tantivy-py>`_ (a Rust-based search engine), it delivers fast indexing and querying with minimal setup.
+
+Features:
+
+1. **Multiple search modes**: ngram (substring matching), full-text (BM25), fuzzy (typo-tolerant), field-specific, and range queries.
+2. **Sorting**: single-field and multi-field sorting on numeric and datetime fields.
+3. **Query language**: Lucene-style syntax with boolean operators (``AND``, ``OR``), range expressions (``year:[2020 TO 2025]``), and field-specific queries (``author:smith``).
+4. **Two-layer disk cache**: automatic caching of data freshness (L1) and query results (L2), with schema-aware invalidation.
+5. **Cross-process safety**: SQLite-backed atomic locking prevents concurrent index corruption.
+6. **Pydantic configuration**: all settings are validated pydantic models with IDE autocompletion support.
 
 
 .. _install:
