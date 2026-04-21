@@ -69,87 +69,84 @@ class TestFullLifecycle:
     """1. Create DataSet → build_index → search → verify results."""
 
     def test_build_then_search(self, tmp_path):
-        ds = DataSet(
+        with DataSet(
             dir_root=tmp_path,
             name="books",
             fields=BOOKS_FIELDS,
-        )
-        ds.build_index(data=BOOKS)
-        r = ds.search("python")
-        assert isinstance(r, SearchResponse)
-        assert r.size >= 1
-        assert r.fresh is False  # data already fresh from build_index
-        assert r.cache is False
-        assert all(isinstance(h.score, float) for h in r.hits)
+        ) as ds:
+            ds.build_index(data=BOOKS)
+            r = ds.search("python")
+            assert isinstance(r, SearchResponse)
+            assert r.size >= 1
+            assert r.fresh is False  # data already fresh from build_index
+            assert r.cache is False
+            assert all(isinstance(h.score, float) for h in r.hits)
 
     def test_downloader_lifecycle(self, tmp_path):
-        ds = DataSet(
+        with DataSet(
             dir_root=tmp_path,
             name="books",
             fields=BOOKS_FIELDS,
             downloader=lambda: BOOKS,
-        )
-        # first search triggers download + build
-        r1 = ds.search("python")
-        assert r1.fresh is True
-        assert r1.size >= 1
+        ) as ds:
+            # first search triggers download + build
+            r1 = ds.search("python")
+            assert r1.fresh is True
+            assert r1.size >= 1
 
-        # second search hits cache
-        r2 = ds.search("python")
-        assert r2.cache is True
-        assert r2.size == r1.size
+            # second search hits cache
+            r2 = ds.search("python")
+            assert r2.cache is True
+            assert r2.size == r1.size
 
 
 class TestSearchAsYouType:
     """2. Simulate incremental typing: p → py → pyt → pyth → python."""
 
     def test_incremental_search(self, tmp_path):
-        ds = DataSet(
+        with DataSet(
             dir_root=tmp_path,
             name="books",
             fields=BOOKS_FIELDS,
             downloader=lambda: BOOKS,
-        )
-        ds.build_index(data=BOOKS)
+        ) as ds:
+            ds.build_index(data=BOOKS)
 
-        prefixes = ["py", "pyt", "pyth", "pytho", "python"]
-        prev_size = None
-        for prefix in prefixes:
-            r = ds.search(prefix)
-            assert r.size >= 1, f"No results for '{prefix}'"
-            # all results should contain "Python" in title
-            for h in r.hits:
-                assert "python" in h.source["title"].lower() or "python" in h.source.get("author", "").lower(), (
-                    f"'{prefix}' matched unexpected doc: {h.source['title']}"
-                )
+            prefixes = ["py", "pyt", "pyth", "pytho", "python"]
+            for prefix in prefixes:
+                r = ds.search(prefix)
+                assert r.size >= 1, f"No results for '{prefix}'"
+                # all results should contain "Python" in title
+                for h in r.hits:
+                    assert "python" in h.source["title"].lower() or "python" in h.source.get("author", "").lower(), (
+                        f"'{prefix}' matched unexpected doc: {h.source['title']}"
+                    )
 
 
 class TestMultiDatasetCoexistence:
     """3. Two DataSets sharing the same dir_root don't interfere."""
 
     def test_independent_datasets(self, tmp_path):
-        books = DataSet(
+        with DataSet(
             dir_root=tmp_path, name="books", fields=BOOKS_FIELDS,
             downloader=lambda: BOOKS,
-        )
-        movies = DataSet(
+        ) as books, DataSet(
             dir_root=tmp_path, name="movies", fields=MOVIES_FIELDS,
             downloader=lambda: MOVIES,
-        )
+        ) as movies:
+            rb = books.search("python")
+            rm = movies.search("matrix")
 
-        rb = books.search("python")
-        rm = movies.search("matrix")
+            assert rb.size >= 1
+            assert rm.size >= 1
 
-        assert rb.size >= 1
-        assert rm.size >= 1
+            # books search shouldn't find movies
+            rb2 = books.search("matrix")
+            assert rb2.size == 0
 
-        # books search shouldn't find movies
-        rb2 = books.search("matrix")
-        assert rb2.size == 0
-
-        # movies search shouldn't find books
-        rm2 = movies.search("python")
-        assert rm2.size == 0
+            # movies search shouldn't find books
+            rm2 = movies.search("python")
+            assert rm2.size == 0
 
 
 class TestDataRefresh:
@@ -164,53 +161,52 @@ class TestDataRefresh:
             else:
                 return BOOKS  # full set
 
-        ds = DataSet(
+        with DataSet(
             dir_root=tmp_path,
             name="books",
             fields=BOOKS_FIELDS,
             downloader=downloader,
-        )
+        ) as ds:
+            r1 = ds.search("python")
+            size_v1 = r1.size
 
-        r1 = ds.search("python")
-        size_v1 = r1.size
-
-        version["v"] = 2
-        r2 = ds.search("python", refresh=True)
-        assert r2.fresh is True
-        assert r2.size >= size_v1  # more data now
+            version["v"] = 2
+            r2 = ds.search("python", refresh=True)
+            assert r2.fresh is True
+            assert r2.size >= size_v1  # more data now
 
 
 class TestSortedSearch:
     """Sorted search end-to-end via DataSet."""
 
     def test_sorted_by_year(self, tmp_path):
-        ds = DataSet(
+        with DataSet(
             dir_root=tmp_path,
             name="books",
             fields=BOOKS_FIELDS,
             downloader=lambda: BOOKS,
             sort=[SortKey(name="year")],
-        )
-        r = ds.search("python")
-        if r.size >= 2:
-            years = [h.source["year"] for h in r.hits]
-            assert years == sorted(years, reverse=True)
+        ) as ds:
+            r = ds.search("python")
+            if r.size >= 2:
+                years = [h.source["year"] for h in r.hits]
+                assert years == sorted(years, reverse=True)
 
     def test_sorted_by_rating_then_year(self, tmp_path):
-        ds = DataSet(
+        with DataSet(
             dir_root=tmp_path,
             name="books",
             fields=BOOKS_FIELDS,
             downloader=lambda: BOOKS,
             sort=[SortKey(name="rating"), SortKey(name="year")],
-        )
-        r = ds.search("python")
-        if r.size >= 2:
-            # ratings should be descending
-            ratings = [h.source["rating"] for h in r.hits]
-            assert ratings == sorted(ratings, reverse=True), (
-                f"Expected descending ratings, got {ratings}"
-            )
+        ) as ds:
+            r = ds.search("python")
+            if r.size >= 2:
+                # ratings should be descending
+                ratings = [h.source["rating"] for h in r.hits]
+                assert ratings == sorted(ratings, reverse=True), (
+                    f"Expected descending ratings, got {ratings}"
+                )
 
 
 class TestPerformanceBaseline:
@@ -227,25 +223,24 @@ class TestPerformanceBaseline:
             }
             for i in range(1000)
         ]
-        ds = DataSet(
+        with DataSet(
             dir_root=tmp_path,
             name="perf",
             fields=BOOKS_FIELDS,
-        )
+        ) as ds:
+            t0 = time.monotonic()
+            ds.build_index(data=docs)
+            index_ms = (time.monotonic() - t0) * 1000
 
-        t0 = time.monotonic()
-        ds.build_index(data=docs)
-        index_ms = (time.monotonic() - t0) * 1000
+            t0 = time.monotonic()
+            r = ds.search("python", limit=20)
+            query_ms = (time.monotonic() - t0) * 1000
 
-        t0 = time.monotonic()
-        r = ds.search("python", limit=20)
-        query_ms = (time.monotonic() - t0) * 1000
-
-        assert r.size > 0
-        # sanity: indexing 1000 docs should be under 5 seconds
-        assert index_ms < 5000, f"Indexing took {index_ms:.0f}ms"
-        # sanity: query should be under 500ms
-        assert query_ms < 500, f"Query took {query_ms:.0f}ms"
+            assert r.size > 0
+            # sanity: indexing 1000 docs should be under 5 seconds
+            assert index_ms < 5000, f"Indexing took {index_ms:.0f}ms"
+            # sanity: query should be under 500ms
+            assert query_ms < 500, f"Query took {query_ms:.0f}ms"
 
 
 if __name__ == "__main__":

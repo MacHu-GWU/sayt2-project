@@ -668,19 +668,19 @@ class TestDataSet:
     # -- build_index ----------------------------------------------------------
 
     def test_build_index_with_data(self, tmp_path):
-        ds = self._make_ds(tmp_path)
-        count = ds.build_index(data=self.DOCS)
-        assert count == 3
+        with self._make_ds(tmp_path) as ds:
+            count = ds.build_index(data=self.DOCS)
+            assert count == 3
 
     def test_build_index_with_downloader(self, tmp_path):
-        ds = self._make_ds(tmp_path, downloader=lambda: self.DOCS)
-        count = ds.build_index()
-        assert count == 3
+        with self._make_ds(tmp_path, downloader=lambda: self.DOCS) as ds:
+            count = ds.build_index()
+            assert count == 3
 
     def test_build_index_no_data_no_downloader(self, tmp_path):
-        ds = self._make_ds(tmp_path)
-        with pytest.raises(ValueError, match="data or downloader"):
-            ds.build_index()
+        with self._make_ds(tmp_path) as ds:
+            with pytest.raises(ValueError, match="data or downloader"):
+                ds.build_index()
 
     # -- search ---------------------------------------------------------------
 
@@ -691,28 +691,28 @@ class TestDataSet:
             call_count["n"] += 1
             return self.DOCS
 
-        ds = self._make_ds(tmp_path, downloader=downloader)
-        result = ds.search("python")
-        assert isinstance(result, SearchResponse)
-        assert result.fresh is True
-        assert result.cache is False
-        assert result.size >= 1
-        assert call_count["n"] == 1
+        with self._make_ds(tmp_path, downloader=downloader) as ds:
+            result = ds.search("python")
+            assert isinstance(result, SearchResponse)
+            assert result.fresh is True
+            assert result.cache is False
+            assert result.size >= 1
+            assert call_count["n"] == 1
 
     def test_second_search_hits_cache(self, tmp_path):
-        ds = self._make_ds(tmp_path, downloader=lambda: self.DOCS)
-        r1 = ds.search("python")
-        assert r1.cache is False
+        with self._make_ds(tmp_path, downloader=lambda: self.DOCS) as ds:
+            r1 = ds.search("python")
+            assert r1.cache is False
 
-        r2 = ds.search("python")
-        assert r2.cache is True
-        assert r2.size == r1.size
+            r2 = ds.search("python")
+            assert r2.cache is True
+            assert r2.size == r1.size
 
     def test_different_query_misses_cache(self, tmp_path):
-        ds = self._make_ds(tmp_path, downloader=lambda: self.DOCS)
-        ds.search("python")
-        r2 = ds.search("rust")
-        assert r2.cache is False
+        with self._make_ds(tmp_path, downloader=lambda: self.DOCS) as ds:
+            ds.search("python")
+            r2 = ds.search("rust")
+            assert r2.cache is False
 
     def test_refresh_forces_rebuild(self, tmp_path):
         call_count = {"n": 0}
@@ -721,76 +721,101 @@ class TestDataSet:
             call_count["n"] += 1
             return self.DOCS
 
-        ds = self._make_ds(tmp_path, downloader=downloader)
-        ds.search("python")
-        assert call_count["n"] == 1
+        with self._make_ds(tmp_path, downloader=downloader) as ds:
+            ds.search("python")
+            assert call_count["n"] == 1
 
-        ds.search("python", refresh=True)
-        assert call_count["n"] == 2
+            ds.search("python", refresh=True)
+            assert call_count["n"] == 2
 
     def test_stale_data_no_downloader_raises(self, tmp_path):
-        ds = self._make_ds(tmp_path)
-        with pytest.raises(ValueError, match="no downloader"):
-            ds.search("python")
+        with self._make_ds(tmp_path) as ds:
+            with pytest.raises(ValueError, match="no downloader"):
+                ds.search("python")
 
     def test_search_response_has_took_ms(self, tmp_path):
-        ds = self._make_ds(tmp_path, downloader=lambda: self.DOCS)
-        r = ds.search("python")
-        assert r.took_ms >= 0
+        with self._make_ds(tmp_path, downloader=lambda: self.DOCS) as ds:
+            r = ds.search("python")
+            assert r.took_ms >= 0
 
     def test_search_with_limit(self, tmp_path):
-        ds = self._make_ds(tmp_path, downloader=lambda: self.DOCS)
-        r = ds.search("python", limit=1)
-        assert r.size <= 1
+        with self._make_ds(tmp_path, downloader=lambda: self.DOCS) as ds:
+            r = ds.search("python", limit=1)
+            assert r.size <= 1
 
     # -- sort integration -----------------------------------------------------
 
     def test_search_with_sort(self, tmp_path):
-        ds = self._make_ds(
+        with self._make_ds(
             tmp_path,
             downloader=lambda: self.DOCS,
             sort=[SortKey(name="year")],
-        )
-        r = ds.search("python")
-        if r.size >= 2:
-            years = [h.source["year"] for h in r.hits]
-            assert years == sorted(years, reverse=True)
+        ) as ds:
+            r = ds.search("python")
+            if r.size >= 2:
+                years = [h.source["year"] for h in r.hits]
+                assert years == sorted(years, reverse=True)
 
     # -- tracker integration --------------------------------------------------
 
     def test_concurrent_build_raises(self, tmp_path):
-        ds = self._make_ds(tmp_path, lock_expire=10)
-        tracker = ds._get_tracker()
-        # hold the lock externally
-        token = tracker.lock_it(ds.name, expire=10)
-        try:
-            with pytest.raises(TrackerIsLockedError):
-                ds.build_index(data=self.DOCS)
-        finally:
-            tracker.unlock_it(ds.name, token)
+        with self._make_ds(tmp_path, lock_expire=10) as ds:
+            tracker = ds._get_tracker()
+            # hold the lock externally
+            token = tracker.lock_it(ds.name, expire=10)
+            try:
+                with pytest.raises(TrackerIsLockedError):
+                    ds.build_index(data=self.DOCS)
+            finally:
+                tracker.unlock_it(ds.name, token)
 
     # -- cache + schema hash --------------------------------------------------
 
     def test_schema_change_invalidates_cache(self, tmp_path):
-        ds1 = self._make_ds(tmp_path, downloader=lambda: self.DOCS)
-        r1 = ds1.search("python")
-        assert r1.cache is False
+        with self._make_ds(tmp_path, downloader=lambda: self.DOCS) as ds1:
+            r1 = ds1.search("python")
+            assert r1.cache is False
 
-        # same query, same dataset — should hit cache
-        r2 = ds1.search("python")
-        assert r2.cache is True
+            # same query, same dataset — should hit cache
+            r2 = ds1.search("python")
+            assert r2.cache is True
 
         # change fields → new schema hash → cache miss
         new_fields = list(self.FIELDS) + [TextField(name="extra")]
         new_docs = [dict(d, extra="x") for d in self.DOCS]
-        ds2 = self._make_ds(
+        with self._make_ds(
             tmp_path,
             fields=new_fields,
             downloader=lambda: new_docs,
-        )
-        r3 = ds2.search("python")
-        assert r3.fresh is True
-        assert r3.cache is False
+        ) as ds2:
+            r3 = ds2.search("python")
+            assert r3.fresh is True
+            assert r3.cache is False
+
+    # -- lifecycle ------------------------------------------------------------
+
+    def test_context_manager(self, tmp_path):
+        with self._make_ds(tmp_path, downloader=lambda: self.DOCS) as ds:
+            ds.search("python")
+            assert ds._cache_instance is not None
+        # __exit__ should have closed it
+        assert ds._cache_instance is None
+
+    def test_close_and_reuse(self, tmp_path):
+        ds = self._make_ds(tmp_path, downloader=lambda: self.DOCS)
+        ds.search("python")
+        ds.close()
+        assert ds._cache_instance is None
+
+        # can search again after close (lazy re-open)
+        r = ds.search("python")
+        assert r.size >= 1
+        ds.close()
+
+    def test_close_idempotent(self, tmp_path):
+        ds = self._make_ds(tmp_path)
+        ds.close()
+        ds.close()  # no error
 
 
 if __name__ == "__main__":

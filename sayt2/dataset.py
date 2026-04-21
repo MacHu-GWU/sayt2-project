@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import tantivy
-from pydantic import BaseModel
+from pydantic import BaseModel, PrivateAttr
 from tantivy import (
     Filter,
     Index,
@@ -72,10 +72,10 @@ class SearchResponse:
     fresh: bool
     cache: bool
 
-    def to_json(self) -> str:
+    def to_json(self) -> str:  # pragma: no cover
         return json.dumps(asdict(self), indent=2, ensure_ascii=False)
 
-    def jprint(self):
+    def jprint(self):  # pragma: no cover
         print(self.to_json())
 
 
@@ -86,7 +86,9 @@ def _ngram_tokenizer_name(f: NgramField) -> str:
 
 def _build_ngram_analyzer(f: NgramField) -> tantivy.TextAnalyzer:
     builder = TextAnalyzerBuilder(
-        Tokenizer.ngram(min_gram=f.min_gram, max_gram=f.max_gram, prefix_only=f.prefix_only)
+        Tokenizer.ngram(
+            min_gram=f.min_gram, max_gram=f.max_gram, prefix_only=f.prefix_only
+        )
     )
     if f.lowercase:
         builder = builder.filter(Filter.lowercase())
@@ -390,6 +392,8 @@ class DataSet(BaseModel):
     num_threads: int | None = None
     lock_expire: int = 60
 
+    _cache_instance: DataSetCache | None = PrivateAttr(default=None)
+
     # -- derived paths --------------------------------------------------------
 
     @property
@@ -413,16 +417,38 @@ class DataSet(BaseModel):
     def _open_index(self) -> Index:
         return open_index(self._dir_index, self.fields)
 
-    def _get_cache(self) -> DataSetCache:
-        return DataSetCache(
-            self._dir_cache,
-            self.name,
-            self._schema_hash,
-            expire=self.cache_expire,
-        )
+    @property
+    def _cache(self) -> DataSetCache:
+        if self._cache_instance is None:
+            self._cache_instance = DataSetCache(
+                self._dir_cache,
+                self.name,
+                self._schema_hash,
+                expire=self.cache_expire,
+            )
+        return self._cache_instance
 
     def _get_tracker(self) -> Tracker:
         return Tracker(self._db_tracker)
+
+    # -- lifecycle ------------------------------------------------------------
+
+    def close(self) -> None:
+        """Close the underlying cache (sqlite3 connection).
+
+        Safe to call multiple times.  After closing, the next
+        :meth:`search` or :meth:`build_index` call will lazily
+        re-open the cache.
+        """
+        if self._cache_instance is not None:
+            self._cache_instance.close()
+            self._cache_instance = None
+
+    def __enter__(self) -> DataSet:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
 
     # -- public API -----------------------------------------------------------
 
@@ -444,19 +470,17 @@ class DataSet(BaseModel):
             data = self.downloader()
 
         tracker = self._get_tracker()
-        cache = self._get_cache()
-        try:
-            with tracker.lock(self.name, expire=self.lock_expire):
-                cache.evict_all()
-                index = self._open_index()
-                count = write_documents(
-                    index, data,
-                    memory_budget_bytes=self.memory_budget_bytes,
-                    num_threads=self.num_threads,
-                )
-                cache.mark_fresh()
-        finally:
-            cache.close()
+        cache = self._cache
+        with tracker.lock(self.name, expire=self.lock_expire):
+            cache.evict_all()
+            index = self._open_index()
+            count = write_documents(
+                index,
+                data,
+                memory_budget_bytes=self.memory_budget_bytes,
+                num_threads=self.num_threads,
+            )
+            cache.mark_fresh()
         return count
 
     def search(
@@ -478,52 +502,50 @@ class DataSet(BaseModel):
         :param refresh: Force a data refresh even if the cache is fresh.
         """
         t0 = time.monotonic()
-        cache = self._get_cache()
-        try:
-            fresh = False
+        cache = self._cache
+        fresh = False
 
-            # Step 1-2: ensure data is fresh
-            if refresh or not cache.is_fresh():
-                if self.downloader is None:
-                    raise ValueError(
-                        "Data is stale but no downloader is configured"
-                    )
-                self.build_index()
-                fresh = True
+        # Step 1-2: ensure data is fresh
+        if refresh or not cache.is_fresh():
+            if self.downloader is None:
+                raise ValueError("Data is stale but no downloader is configured")
+            self.build_index()
+            fresh = True
 
-            # Step 3: check query cache
-            cached = cache.get_query_result(query, limit)
-            if cached is not None:
-                return cached
+        # Step 3: check query cache
+        cached = cache.get_query_result(query, limit)
+        if cached is not None:
+            return cached
 
-            # Step 4: execute query
-            index = self._open_index()
-            if self.sort:
-                hits = search_index_sorted(
-                    index, self.fields, query,
-                    sort_keys=self.sort, limit=limit,
-                )
-            else:
-                hits = search_index(index, self.fields, query, limit=limit)
-
-            took_ms = int((time.monotonic() - t0) * 1000)
-            response = SearchResponse(
-                hits=hits,
-                size=len(hits),
-                took_ms=took_ms,
-                fresh=fresh,
-                cache=False,
+        # Step 4: execute query
+        index = self._open_index()
+        if self.sort:
+            hits = search_index_sorted(
+                index,
+                self.fields,
+                query,
+                sort_keys=self.sort,
+                limit=limit,
             )
+        else:
+            hits = search_index(index, self.fields, query, limit=limit)
 
-            # cache with cache=True so subsequent reads get the cached flag
-            cached_response = SearchResponse(
-                hits=hits,
-                size=len(hits),
-                took_ms=took_ms,
-                fresh=fresh,
-                cache=True,
-            )
-            cache.set_query_result(query, limit, cached_response)
-            return response
-        finally:
-            cache.close()
+        took_ms = int((time.monotonic() - t0) * 1000)
+        response = SearchResponse(
+            hits=hits,
+            size=len(hits),
+            took_ms=took_ms,
+            fresh=fresh,
+            cache=False,
+        )
+
+        # cache with cache=True so subsequent reads get the cached flag
+        cached_response = SearchResponse(
+            hits=hits,
+            size=len(hits),
+            took_ms=took_ms,
+            fresh=fresh,
+            cache=True,
+        )
+        cache.set_query_result(query, limit, cached_response)
+        return response
