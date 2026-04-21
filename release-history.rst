@@ -28,6 +28,9 @@ x.y.z (Backlog)
     - ``sayt2.api.MalformedFieldSettingError``
     - ``sayt2.api.MalformedDatasetSettingError``
     - ``sayt2.api.TrackerIsLockedError``
+    - ``sayt2.api.FieldTypeEnum``
+    - ``sayt2.api.TokenizerEnum``
+    - ``sayt2.api.NumericKindEnum``
     - ``sayt2.api.BaseField``
     - ``sayt2.api.StoredField``
     - ``sayt2.api.KeywordField``

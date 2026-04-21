@@ -14,6 +14,10 @@ Export list
 
 The table below groups every exported name by its source module:
 
+- ``sayt2.api.FieldTypeEnum``
+- ``sayt2.api.TokenizerEnum``
+- ``sayt2.api.NumericKindEnum``
+
 .. list-table::
    :header-rows: 1
    :widths: 30 35 35
@@ -30,6 +34,15 @@ The table below groups every exported name by its source module:
    * - :mod:`~sayt2.exc`
      - :class:`~sayt2.exc.TrackerIsLockedError`
      - Exception
+   * - :mod:`~sayt2.constants`
+     - :class:`~sayt2.constants.FieldTypeEnum`
+     - Constants
+   * - :mod:`~sayt2.constants`
+     - :class:`~sayt2.constants.TokenizerEnum`
+     - Constants
+   * - :mod:`~sayt2.constants`
+     - :class:`~sayt2.constants.NumericKindEnum`
+     - Constants
    * - :mod:`~sayt2.fields`
      - :class:`~sayt2.fields.BaseField`
      - Class

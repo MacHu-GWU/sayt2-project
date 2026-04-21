@@ -9,6 +9,9 @@ All names importable from ``sayt2.api`` are considered the stable public API.
 from .exc import MalformedFieldSettingError
 from .exc import MalformedDatasetSettingError
 from .exc import TrackerIsLockedError
+from .constants import FieldTypeEnum
+from .constants import TokenizerEnum
+from .constants import NumericKindEnum
 from .fields import BaseField
 from .fields import StoredField
 from .fields import KeywordField
