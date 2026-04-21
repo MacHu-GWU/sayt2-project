@@ -87,7 +87,9 @@ def test():
         # r.jprint()  # for debug only
         assert r.size >= 2
         ratings = [h.source["rating"] for h in r.hits]
-        assert ratings == sorted(ratings, reverse=True), f"Expected descending ratings, got {ratings}"
+        assert ratings == sorted(
+            ratings, reverse=True
+        ), f"Expected descending ratings, got {ratings}"
 
     # ------------------------------------------------------------------
     # 2. Sort by price ASC — cheapest books first
@@ -140,7 +142,9 @@ def test():
         # r.jprint()  # for debug only
         assert r.size >= 1
         for h in r.hits:
-            assert 2020 <= h.source["year"] <= 2023, f"year {h.source['year']} out of range"
+            assert (
+                2020 <= h.source["year"] <= 2023
+            ), f"year {h.source['year']} out of range"
 
         # ------------------------------------------------------------------
         # 5. Range query with operator: price:>40
@@ -158,7 +162,9 @@ def test():
         # r.jprint()  # for debug only
         assert r.size >= 1
         for h in r.hits:
-            assert "Blandy" in h.source["author"], f"Expected Blandy, got {h.source['author']}"
+            assert (
+                "Blandy" in h.source["author"]
+            ), f"Expected Blandy, got {h.source['author']}"
 
         # ------------------------------------------------------------------
         # 7. Boolean AND: text + range combined
@@ -209,6 +215,7 @@ def test():
         # 10. Same query + same ds → cache hit
         # ------------------------------------------------------------------
         r2 = ds_sorted.search("python AND year:[2020 TO 2025]")
+        # r2.jprint()  # pragma: no cover
         assert r2.cache is True
         assert r2.size == r.size
 
@@ -216,6 +223,7 @@ def test():
         # 11. Different range → cache miss
         # ------------------------------------------------------------------
         r3 = ds_sorted.search("python AND year:[2015 TO 2019]")
+        # r3.jprint()  # pragma: no cover
         assert r3.cache is False
 
     # ------------------------------------------------------------------
